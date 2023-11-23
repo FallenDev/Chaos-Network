@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+      <TargetFramework>net8.0</TargetFramework>
+      <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Chaos.Packets.Abstractions\Chaos.Packets.Abstractions.csproj" />
+    </ItemGroup>
+    <ItemGroup>
+        <Folder Include="Definitions\" />
+    </ItemGroup>
+</Project>
