@@ -2,15 +2,18 @@
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<PlatformTarget>x64</PlatformTarget>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
 		<DebugType>embedded</DebugType>
-		<IsAotCompatible>True</IsAotCompatible>
+		<IsAotCompatible>False</IsAotCompatible>
+		<IsTrimmable>False</IsTrimmable>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
 		<DebugType>embedded</DebugType>
 		<OutputPath>..\\Staging</OutputPath>
-		<IsAotCompatible>True</IsAotCompatible>
+		<IsAotCompatible>False</IsAotCompatible>
+		<IsTrimmable>False</IsTrimmable>
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Chaos.Cryptography.Abstractions\Chaos.Cryptography.Abstractions.csproj" />
