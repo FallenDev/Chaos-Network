@@ -20,7 +20,7 @@ public sealed record MapInfoSerializer : ServerPacketSerializer<MapInfoArgs>
         writer.WriteByte(args.Width);
         writer.WriteByte(args.Height);
         writer.WriteByte(args.Flags);
-        writer.WriteBytes(new byte[2]);
+        writer.WriteUInt16(ushort.MinValue);
         writer.WriteUInt16(args.CheckSum);
         writer.WriteString8(args.Name);
     }
