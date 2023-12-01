@@ -9,7 +9,7 @@ C# .NET 8
 
 ## Authors  
   
-Chaos: Is a project developed by [Sichi](https://github.com/Sichii) - Currently Zolian runs ontop of [Chaos Networking Layer](https://github.com/Sichii/Chaos-Server)   
+Chaos: Is a project developed by [Sichi](https://github.com/Sichii) - Zolian runs on the [Chaos Networking Layer](https://github.com/Sichii/Chaos-Server)     
 
 ## Financial
 Zolian is a fair-use project and accepts zero compensations of any kind
