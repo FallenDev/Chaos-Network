@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>Chaos-Networking</id>
+    <version>1.0.0</version>
+    <title>Chaos-Networking</title>
+    <authors>Sichii,FallenDev</authors>
+    <owners>Sichii,FallenDev</owners>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <licenseUrl>https://github.com/FallenDev/Chaos-Network/blob/master/LICENSE.txt</licenseUrl>
+    <icon>images\icon.png</icon>
+    <projectUrl>https://github.com/FallenDev/Chaos-Network</projectUrl>
+    <description>Networking layer and supporting libraries for Zolian</description>
+    <summary>Includes projects from the Chaos-Server Solution, main focus of this nuget is to compile the networking layer into one package.</summary>
+    <releaseNotes>Initial Nuget for compiling libraries</releaseNotes>
+    <copyright>2023 FallenDev</copyright>
+    <language>en-US</language>
+    <dependencies>
+      <group targetFramework="net8.0">
+        <dependency id="Microsoft.Extensions.Options" version="8.0.0" />
+        <dependency id="Microsoft.Extensions.DependencyInjection.Abstractions" version="8.0.0" />
+        <dependency id="Microsoft.Extensions.Logging" version="8.0.0" />
+        <dependency id="Microsoft.Extensions.Options.ConfigurationExtensions" version="8.0.0" />
+        <dependency id="JetBrains.Annotations" version="2023.3.0" />
+        <dependency id="zlib.net-mutliplatform" version="1.0.6" />
+        <dependency id="Microsoft.Extensions.Hosting" version="8.0.0" />
+        <dependency id="Microsoft.Extensions.Hosting.Abstractions" version="8.0.0" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="8.0.0" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="images\icon.png" target="images\icon.png" />
+    <file src="lib\net8.0\Chaos.Common.Abstractions.dll" target="lib\net8.0\Chaos.Common.Abstractions.dll" />
+    <file src="lib\net8.0\Chaos.Common.dll" target="lib\net8.0\Chaos.Common.dll" />
+    <file src="lib\net8.0\Chaos.Cryptography.Abstractions.dll" target="lib\net8.0\Chaos.Cryptography.Abstractions.dll" />
+    <file src="lib\net8.0\Chaos.Cryptography.dll" target="lib\net8.0\Chaos.Cryptography.dll" />
+    <file src="lib\net8.0\Chaos.Extensions.Common.dll" target="lib\net8.0\Chaos.Extensions.Common.dll" />
+    <file src="lib\net8.0\Chaos.Geometry.Abstractions.dll" target="lib\net8.0\Chaos.Geometry.Abstractions.dll" />
+    <file src="lib\net8.0\Chaos.Geometry.dll" target="lib\net8.0\Chaos.Geometry.dll" />
+    <file src="lib\net8.0\Chaos.IO.dll" target="lib\net8.0\Chaos.IO.dll" />
+    <file src="lib\net8.0\Chaos.Networking.Abstractions.dll" target="lib\net8.0\Chaos.Networking.Abstractions.dll" />
+    <file src="lib\net8.0\Chaos.Networking.dll" target="lib\net8.0\Chaos.Networking.dll" />
+    <file src="lib\net8.0\Chaos.NLog.Logging.dll" target="lib\net8.0\Chaos.NLog.Logging.dll" />
+    <file src="lib\net8.0\Chaos.Packets.Abstractions.dll" target="lib\net8.0\Chaos.Packets.Abstractions.dll" />
+    <file src="lib\net8.0\Chaos.Packets.dll" target="lib\net8.0\Chaos.Packets.dll" />
+    <file src="lib\net8.0\Chaos.Time.Abstractions.dll" target="lib\net8.0\Chaos.Time.Abstractions.dll" />
+    <file src="lib\net8.0\Chaos.Time.dll" target="lib\net8.0\Chaos.Time.dll" />
+    <file src="licenses\LICENSE.txt" target="licenses\LICENSE.txt" />
+  </files>
+</package>
