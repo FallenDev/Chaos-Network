@@ -147,10 +147,9 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     {
         var handler = ClientHandlers[(byte)packet.OpCode];
 
-        if (handler is null)
-            return default;
-
-        return handler(client, in packet);
+        if (handler is not null) return handler(client, in packet);
+        client.Disconnect();
+        return default;
     }
 
     /// <summary>
