@@ -98,13 +98,12 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
         await Task.Yield();
 
         var endPoint = new IPEndPoint(IPAddress.Any, Options.Port);
+        Socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.NoDelay, true);
+        Socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.DontFragment, true);
+        Socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, new LingerOption(true, 5));
         Socket.Bind(endPoint);
         Socket.Listen(50);
         Socket.BeginAccept(OnConnection, Socket);
-        Socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-        Socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.NoDelay, true);
-        Socket.DontFragment = true;
-        Socket.LingerState = new LingerOption(true, 10);
         Logger.WithTopics(Topics.Actions.Listening)
               .LogInformation("Listening on {@EndPoint}", endPoint.Port.ToString());
 
