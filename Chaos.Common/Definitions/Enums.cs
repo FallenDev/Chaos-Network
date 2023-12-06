@@ -683,17 +683,26 @@ public enum BaseClass : byte
 }
 
 /// <summary>
-///     A byte representing the 'medenia class' of an aisling.
+///     A flag representing the 'job class' of an aisling.
 ///     Used in many places.
 /// </summary>
-public enum AdvClass : byte
+[Flags]
+public enum JobClass
 {
     None = 0,
-    Gladiator = 1,
-    Druid = 2,
-    Archer = 3,
-    Bard = 4,
-    Summoner = 5
+    Thief = 1,
+    DarkKnight = 1 << 1,
+    Templar = 1 << 2,
+    Knight = 1 << 3,
+    Ninja = 1 << 4,
+    SharpShooter = 1 << 5,
+    Oracle = 1 << 6,
+    Bard = 1 << 7,
+    Summoner = 1 << 8,
+    Samurai = 1 << 9,
+    ShaolinMonk = 1 << 10,
+    Necromancer = 1 << 11,
+    Dragoon = 1 << 12
 }
 
 /// <summary>

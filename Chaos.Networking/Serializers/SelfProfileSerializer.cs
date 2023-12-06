@@ -40,13 +40,13 @@ public sealed record SelfProfileSerializer : ServerPacketSerializer<SelfProfileA
 
         var classTitle = args.BaseClass.ToString();
 
-        if (args.AdvClass.HasValue && (args.AdvClass != AdvClass.None))
-            classTitle = args.AdvClass.ToString();
+        if (args.JobClass.HasValue && (args.JobClass != JobClass.None))
+            classTitle = args.JobClass.ToString();
 
         writer.WriteByte((byte)args.BaseClass);
-        writer.WriteBoolean(args.AdvClass.HasValue && (args.AdvClass != AdvClass.None));
+        writer.WriteBoolean(args.JobClass.HasValue && (args.JobClass != JobClass.None));
         writer.WriteBoolean(args.IsMaster);
-        writer.WriteString8(classTitle!);
+        writer.WriteString8(classTitle);
         writer.WriteString8(args.GuildName ?? string.Empty);
         writer.WriteByte((byte)Math.Min(byte.MaxValue, args.LegendMarks.Count));
 
