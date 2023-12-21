@@ -23,14 +23,20 @@ public sealed record ProfileSerializer : ServerPacketSerializer<ProfileArgs>
         foreach (var slot in NETWORKING_CONSTANTS.PROFILE_EQUIPMENTSLOT_ORDER)
         {
             args.Equipment.TryGetValue(slot, out var item);
+            if (item == null)
+            {
+                writer.WriteUInt16(ushort.MinValue);
+                writer.WriteByte(0x00);
+                continue;
+            }
 
-            var offsetSprite = item?.Sprite ?? 0;
+            var offsetSprite = item.Sprite;
 
             if (offsetSprite is not 0)
                 offsetSprite += NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET;
 
             writer.WriteUInt16(offsetSprite);
-            writer.WriteByte((byte)(item?.Color ?? DisplayColor.Default));
+            writer.WriteByte((byte)(item.Color));
         }
 
         writer.WriteByte((byte)args.SocialStatus);
@@ -51,12 +57,14 @@ public sealed record ProfileSerializer : ServerPacketSerializer<ProfileArgs>
             writer.WriteString8(mark.Text);
         }
 
-        var remaining = args.Portrait.Length;
+        var portraitLength = args.Portrait?.Length ?? 0;
+        var remaining = portraitLength;
         remaining += args.ProfileText?.Length ?? 0;
         remaining += 4;
 
         writer.WriteUInt16((ushort)remaining);
-        writer.WriteData16(args.Portrait); //2 + length
+        writer.WriteUInt16((ushort)portraitLength);
+        writer.WriteData16(args.Portrait ?? Array.Empty<byte>()); //2 + length
         writer.WriteString16(args.ProfileText ?? string.Empty); //2 + length
     }
 }
