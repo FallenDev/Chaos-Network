@@ -7,6 +7,7 @@
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
 		<IsAotCompatible>False</IsAotCompatible>
+		<OutputPath>..\\Staging</OutputPath>
 		<DebugType>embedded</DebugType>
 		<IsTrimmable>False</IsTrimmable>
 	</PropertyGroup>
