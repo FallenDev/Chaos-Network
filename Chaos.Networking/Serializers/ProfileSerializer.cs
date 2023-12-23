@@ -71,6 +71,6 @@ public sealed record ProfileSerializer : ServerPacketSerializer<ProfileArgs>
         }
 
         //nfi
-        writer.WriteBytes(new byte[3]);
+        writer.WriteByte(0);
     }
 }
