@@ -88,6 +88,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
         PacketSerializer = packetSerializer;
         ClientHandlers = new ClientHandler?[byte.MaxValue];
         Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        ConfigureTcpSocket(Socket);
         Sync = new FifoAutoReleasingSemaphoreSlim(1, 1);
         IndexHandlers();
     }
@@ -99,7 +100,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
 
         var endPoint = new IPEndPoint(IPAddress.Any, Options.Port);
         Socket.Bind(endPoint);
-        Socket.Listen(50);
+        Socket.Listen(1000);
         Socket.BeginAccept(OnConnection, Socket);
         Logger.WithTopics(Topics.Actions.Listening)
               .LogInformation("Listening on {@EndPoint}", endPoint.Port.ToString());
@@ -226,4 +227,34 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
         return default;
     }
     #endregion
+
+    private void ConfigureTcpSocket(Socket tcpSocket)
+    {
+        // Don't allow another socket to bind to this port.
+        tcpSocket.ExclusiveAddressUse = true;
+
+        // The socket will linger for 10 seconds after
+        // Socket.Close is called.
+        tcpSocket.LingerState = new LingerOption(true, 5);
+
+        // Disable the Nagle Algorithm for this tcp socket.
+        tcpSocket.NoDelay = true;
+
+        // Set the receive buffer size to 8k
+        tcpSocket.ReceiveBufferSize = 8192;
+
+        // Set the timeout for synchronous receive methods to
+        // 1 second (1000 milliseconds.)
+        tcpSocket.ReceiveTimeout = 1000;
+
+        // Set the send buffer size to 8k.
+        tcpSocket.SendBufferSize = 8192;
+
+        // Set the timeout for synchronous send methods
+        // to 1 second (1000 milliseconds.)
+        tcpSocket.SendTimeout = 1000;
+
+        // Set the Time To Live (TTL) to 42 router hops.
+        tcpSocket.Ttl = 42;
+    }
 }
