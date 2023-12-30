@@ -233,9 +233,9 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
         // Don't allow another socket to bind to this port.
         tcpSocket.ExclusiveAddressUse = true;
 
-        // The socket will linger for 10 seconds after
+        // The socket will not linger
         // Socket.Close is called.
-        tcpSocket.LingerState = new LingerOption(true, 5);
+        tcpSocket.LingerState = new LingerOption(false, 0);
 
         // Disable the Nagle Algorithm for this tcp socket.
         tcpSocket.NoDelay = true;
@@ -253,8 +253,5 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
         // Set the timeout for synchronous send methods
         // to 1 second (1000 milliseconds.)
         tcpSocket.SendTimeout = 1000;
-
-        // Set the Time To Live (TTL) to 42 router hops.
-        tcpSocket.Ttl = 42;
     }
 }

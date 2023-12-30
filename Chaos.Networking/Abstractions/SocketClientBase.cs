@@ -284,14 +284,21 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     /// <inheritdoc />
     public virtual void Disconnect()
     {
-        if (!Connected)
-            return;
-
         Connected = false;
 
         try
         {
-            Socket.Disconnect(false);
+            Socket.Close(0);
+        }
+        catch
+        {
+            //ignored
+        }
+
+        try
+        {
+            if (Socket.Connected)
+                Socket.Disconnect(false);
         } catch
         {
             //ignored

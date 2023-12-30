@@ -11,6 +11,8 @@ internal static class SocketExtensions
         EventHandler<SocketAsyncEventArgs> completedEvent
     )
     {
+        if (!socket.Connected) return;
+
         //if we receive true, it means the io operation is pending, and the completion will be raised on the args completed event
         var completedSynchronously = !socket.ReceiveAsync(args);
 
