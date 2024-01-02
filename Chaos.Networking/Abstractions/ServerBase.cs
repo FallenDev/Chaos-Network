@@ -100,7 +100,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
 
         var endPoint = new IPEndPoint(IPAddress.Any, Options.Port);
         Socket.Bind(endPoint);
-        Socket.Listen(1000);
+        Socket.Listen(100);
         Socket.BeginAccept(OnConnection, Socket);
         Logger.WithTopics(Topics.Actions.Listening)
               .LogInformation("Listening on {@EndPoint}", endPoint.Port.ToString());
@@ -161,7 +161,13 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        await using var @lock = await Sync.WaitAsync();
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(5));
+
+        if (@lock == null)
+        {
+            Logger.LogInformation($"Contention on {action.Method.Name}");
+            return;
+        }
 
         try
         {
@@ -186,7 +192,13 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, Func<T, ValueTask> action)
     {
-        await using var @lock = await Sync.WaitAsync();
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(5));
+
+        if (@lock == null)
+        {
+            Logger.LogInformation($"Contention on {action.Method.Name}");
+            return;
+        }
 
         try
         {
@@ -228,30 +240,13 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     }
     #endregion
 
-    private void ConfigureTcpSocket(Socket tcpSocket)
+    private static void ConfigureTcpSocket(Socket tcpSocket)
     {
-        // Don't allow another socket to bind to this port.
-        tcpSocket.ExclusiveAddressUse = true;
-
         // The socket will not linger
         // Socket.Close is called.
         tcpSocket.LingerState = new LingerOption(false, 0);
 
         // Disable the Nagle Algorithm for this tcp socket.
         tcpSocket.NoDelay = true;
-
-        // Set the receive buffer size to 8k
-        tcpSocket.ReceiveBufferSize = 8192;
-
-        // Set the timeout for synchronous receive methods to
-        // 1 second (1000 milliseconds.)
-        tcpSocket.ReceiveTimeout = 1000;
-
-        // Set the send buffer size to 8k.
-        tcpSocket.SendBufferSize = 8192;
-
-        // Set the timeout for synchronous send methods
-        // to 1 second (1000 milliseconds.)
-        tcpSocket.SendTimeout = 1000;
     }
 }
