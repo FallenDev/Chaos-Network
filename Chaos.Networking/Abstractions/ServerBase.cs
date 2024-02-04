@@ -94,6 +94,23 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     }
 
     /// <inheritdoc />
+    public override void Dispose()
+    {
+        GC.SuppressFinalize(this);
+
+        try
+        {
+            Socket.Close();
+        }
+        catch
+        {
+            //ignored
+        }
+
+        base.Dispose();
+    }
+
+    /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await Task.Yield();
@@ -117,19 +134,53 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
         }
 
         await Parallel.ForEachAsync(ClientRegistry, stoppingToken, (client, _) =>
+        {
+            try
             {
                 client.Disconnect();
-                return default;
-            });
+            }
+            catch
+            {
+                //ignored
+            }
 
-        await Socket.DisconnectAsync(false, stoppingToken).ConfigureAwait(false);
+            return default;
+        });
+
+        Dispose();
     }
 
     /// <summary>
     ///     Called when a new connection is accepted by the server.
     /// </summary>
+    /// <param name="clientSocket">The socket that connected to the server</param>
+    protected abstract void OnConnected(Socket clientSocket);
+
+    /// <summary>
+    ///     Called when a new connection is accepted by the server.
+    /// </summary>
     /// <param name="ar">The asynchronous result of the operation.</param>
-    protected abstract void OnConnection(IAsyncResult ar);
+    protected virtual void OnConnection(IAsyncResult ar)
+    {
+        var serverSocket = (Socket)ar.AsyncState!;
+        Socket? clientSocket = null;
+
+        try
+        {
+            clientSocket = serverSocket.EndAccept(ar);
+        }
+        catch
+        {
+            //ignored
+        }
+        finally
+        {
+            serverSocket.BeginAccept(OnConnection, serverSocket);
+        }
+
+        if (clientSocket is not null && clientSocket.Connected)
+            OnConnected(clientSocket);
+    }
 
     #region Handlers
     /// <summary>
@@ -137,6 +188,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     /// </summary>
     protected virtual void IndexHandlers()
     {
+        ClientHandlers[(byte)ClientOpCode.ClientException] = OnClientException;
         ClientHandlers[(byte)ClientOpCode.HeartBeat] = OnHeartBeatAsync;
         ClientHandlers[(byte)ClientOpCode.SequenceChange] = OnSequenceChangeAsync;
         ClientHandlers[(byte)ClientOpCode.SynchronizeTicks] = OnSynchronizeTicksAsync;
@@ -146,10 +198,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     public virtual ValueTask HandlePacketAsync(T client, in ClientPacket packet)
     {
         var handler = ClientHandlers[(byte)packet.OpCode];
-
-        if (handler is not null) return handler(client, in packet);
-        client.Disconnect();
-        return default;
+        return handler?.Invoke(client, in packet) ?? default;
     }
 
     /// <summary>
@@ -161,6 +210,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
+        // Timeout was added here to prevent issues with Zolian APIs
         await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(5));
 
         if (@lock == null)
@@ -192,6 +242,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, Func<T, ValueTask> action)
     {
+        // Timeout was added here to prevent issues with Zolian APIs
         await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(5));
 
         if (@lock == null)
@@ -225,6 +276,22 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IS
     public ValueTask OnSequenceChangeAsync(T client, in ClientPacket packet)
     {
         client.SetSequence(packet.Sequence);
+
+        return default;
+    }
+
+    /// <inheritdoc />
+    public virtual ValueTask OnClientException(T client, in ClientPacket packet)
+    {
+        var args = PacketSerializer.Deserialize<ClientExceptionArgs>(in packet);
+
+        Logger.WithTopics(Topics.Entities.Packet, Topics.Actions.Processing)
+            .WithProperty(client)
+            .LogError(
+                "{@ClientType} encountered an exception: {@Exception}",
+                client.GetType()
+                    .Name,
+                args.ExceptionStr);
 
         return default;
     }

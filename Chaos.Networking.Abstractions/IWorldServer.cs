@@ -22,9 +22,7 @@ public interface IWorldServer<in TClient> : IServer<TClient> where TClient: ISoc
     ///     Occurs when a client uses an ability that has chant lines
     /// </summary>
     ValueTask OnChant(TClient client, in ClientPacket clientPacket);
-
-    ValueTask OnException(TClient client, in ClientPacket clientPacket);
-
+    
     /// <summary>
     ///     Occurs when a client clicks on an object
     /// </summary>

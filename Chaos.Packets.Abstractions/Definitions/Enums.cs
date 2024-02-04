@@ -198,7 +198,7 @@ public enum ClientOpCode : byte
     ///     OpCode is used when the client encounters an exception<br />
     ///     Hex value: 0x42
     /// </summary>
-    Exception = 66,
+    ClientException = 66,
     /// <summary>
     ///     OpCode used when a client clicks on an object<br />
     ///     Hex value: 0x43
