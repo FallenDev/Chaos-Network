@@ -11,7 +11,7 @@ public sealed record ConnectionInfoArgs : ISendArgs
     /// <summary>
     ///     The encryption key that the client should use to encrypt packets
     /// </summary>
-    public byte[] Key { get; set; } = Array.Empty<byte>();
+    public byte[] Key { get; set; } = [];
     /// <summary>
     ///     The seed that the client should use to encrypt packets
     /// </summary>

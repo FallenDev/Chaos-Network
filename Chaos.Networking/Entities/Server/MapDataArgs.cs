@@ -15,7 +15,7 @@ public sealed record MapDataArgs : ISendArgs
     /// <summary>
     ///     The raw map data for the current row
     /// </summary>
-    public byte[] MapData { get; set; } = Array.Empty<byte>();
+    public byte[] MapData { get; set; } = [];
     /// <summary>
     ///     The width of the row being sent
     /// </summary>

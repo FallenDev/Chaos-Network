@@ -18,5 +18,5 @@ public sealed record BoardInfo
     /// <summary>
     ///     A collection representing the posts on the board
     /// </summary>
-    public ICollection<PostInfo> Posts { get; set; } = Array.Empty<PostInfo>();
+    public ICollection<PostInfo> Posts { get; set; } = [];
 }

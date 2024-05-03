@@ -13,7 +13,7 @@ public sealed class RedirectManager : BackgroundService, IRedirectManager
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
     private readonly ILogger<RedirectManager> Logger;
-    private readonly ConcurrentDictionary<uint, IRedirect> Redirects = new();
+    private readonly ConcurrentDictionary<uint, IRedirect> Redirects = [];
 
     /// <summary>
     ///     Initializes a new instance of <see cref="RedirectManager" />

@@ -19,5 +19,5 @@ public sealed record WorldMapArgs : ISendArgs
     /// <summary>
     ///     A collection of clickable nodes to display on the world map
     /// </summary>
-    public ICollection<WorldMapNodeInfo> Nodes { get; set; } = new List<WorldMapNodeInfo>();
+    public ICollection<WorldMapNodeInfo> Nodes { get; set; } = [];
 }

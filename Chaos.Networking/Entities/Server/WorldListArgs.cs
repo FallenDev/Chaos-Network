@@ -11,5 +11,5 @@ public sealed record WorldListArgs : ISendArgs
     /// <summary>
     ///     A collection of information about characters in the world
     /// </summary>
-    public ICollection<WorldListMemberInfo> WorldList { get; set; } = new List<WorldListMemberInfo>();
+    public ICollection<WorldListMemberInfo> WorldList { get; set; } = [];
 }

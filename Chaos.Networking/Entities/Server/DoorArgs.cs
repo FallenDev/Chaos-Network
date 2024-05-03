@@ -10,5 +10,5 @@ public sealed record DoorArgs : ISendArgs
     /// <summary>
     ///     The doors being sent to the client to display
     /// </summary>
-    public ICollection<DoorInfo> Doors { get; set; } = new List<DoorInfo>();
+    public ICollection<DoorInfo> Doors { get; set; } = [];
 }

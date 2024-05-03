@@ -11,5 +11,5 @@ public sealed record DisplayVisibleEntitiesArgs : ISendArgs
     /// <summary>
     ///     The (non-aisling) visible entities being sent to the client to display
     /// </summary>
-    public ICollection<VisibleEntityInfo> VisibleObjects { get; set; } = new List<VisibleEntityInfo>();
+    public ICollection<VisibleEntityInfo> VisibleObjects { get; set; } = [];
 }

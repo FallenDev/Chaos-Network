@@ -16,7 +16,7 @@ public sealed record BoardArgs : ISendArgs
     /// <summary>
     ///     If the type is to display a list of boards, these are those boards
     /// </summary>
-    public ICollection<BoardInfo>? Boards { get; set; } = Array.Empty<BoardInfo>();
+    public ICollection<BoardInfo>? Boards { get; set; } = [];
     /// <summary>
     ///     If the type is to display a post, this is whether or not the Prev button should be clickable
     /// </summary>

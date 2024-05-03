@@ -47,9 +47,9 @@ public sealed record ProfileSerializer : ServerPacketSerializer<ProfileArgs>
         writer.WriteString8(args.GuildRank ?? string.Empty);
         writer.WriteString8(args.JobClass != JobClass.None ? args.JobClass.ToString() : args.BaseClass.ToString());
         writer.WriteString8(args.GuildName ?? string.Empty);
-        writer.WriteByte((byte)args.LegendMarks.Count);
+        writer.WriteByte((byte)Math.Min(byte.MaxValue, args.LegendMarks.Count));
 
-        foreach (var mark in args.LegendMarks)
+        foreach (var mark in args.LegendMarks.Take(byte.MaxValue))
         {
             writer.WriteByte((byte)mark.Icon);
             writer.WriteByte((byte)mark.Color);

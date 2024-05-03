@@ -57,7 +57,7 @@ public sealed record SelfProfileArgs : ISendArgs
     /// <summary>
     ///     The character's legend marks
     /// </summary>
-    public ICollection<LegendMarkInfo> LegendMarks { get; set; } = new List<LegendMarkInfo>();
+    public ICollection<LegendMarkInfo> LegendMarks { get; set; } = [];
     /// <summary>
     ///     The character's name
     /// </summary>
@@ -69,7 +69,7 @@ public sealed record SelfProfileArgs : ISendArgs
     /// <summary>
     ///     The raw data of the character's portrait
     /// </summary>
-    public byte[] Portrait { get; set; } = Array.Empty<byte>();
+    public byte[] Portrait { get; set; } = [];
     /// <summary>
     ///     The character's profile text
     /// </summary>
