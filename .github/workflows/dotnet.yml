@@ -4,6 +4,7 @@
 name: .NET
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "master" ]
   pull_request:
@@ -11,18 +12,23 @@ on:
 
 jobs:
   build:
-
+    name: 🛠️ Build and test
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Setup .NET
+    - name: 🛠️ Check-out code
+      uses: actions/checkout@v3
+    - name: 🛠️ Setup .NET
       uses: actions/setup-dotnet@v3
       with:
-        dotnet-version: 6.0.x
-    - name: Restore dependencies
+        dotnet-version: 9.x
+    - name: 🛠️ Enable Problem Matchers
+      run: echo "::add-matcher::.github/matchers/dotnet.json"
+    - name: 🛠️ Restore & Load Dependencies
+    # Eventually add in cache for packages
       run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
-    - name: Test
+    - name: 🛠️ Build Release
+    # Test pipeline as production Release
+      run: dotnet build --configuration Release --no-restore
+    - name: 🛠️ Test Release
       run: dotnet test --no-build --verbosity normal
