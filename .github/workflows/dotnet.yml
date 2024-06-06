@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    name: 🛠️ Build and test
+    name: 🛠️ Build and Test Release 🛠️
     runs-on: ubuntu-latest
 
     steps:
