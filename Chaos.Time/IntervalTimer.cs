@@ -16,14 +16,19 @@ public class IntervalTimer : IIntervalTimer
     ///     The amount of time that must accumulate to set <see cref="IntervalElapsed" /> to true
     /// </summary>
     protected TimeSpan Interval { get; set; }
+
     /// <inheritdoc />
     public bool IntervalElapsed { get; protected set; }
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="IntervalTimer" /> class
     /// </summary>
-    /// <param name="interval">The interval between setting <see cref="IntervalElapsed" /> to true</param>
-    /// <param name="startAsElapsed">Whether or not to create the timer in an elapsed state</param>
+    /// <param name="interval">
+    ///     The interval between setting <see cref="IntervalElapsed" /> to true
+    /// </param>
+    /// <param name="startAsElapsed">
+    ///     Whether or not to create the timer in an elapsed state
+    /// </param>
     public IntervalTimer(TimeSpan interval, bool startAsElapsed = true)
     {
         Interval = interval;
@@ -44,8 +49,7 @@ public class IntervalTimer : IIntervalTimer
     /// <inheritdoc />
     public virtual void SetOrigin(DateTime origin)
     {
-        var timerOrigin = origin.Date;
-        var addedTime = origin - timerOrigin;
+        var addedTime = DateTime.UtcNow - origin;
         var remainder = new TimeSpan(addedTime.Ticks % Interval.Ticks);
 
         Elapsed = remainder;
@@ -55,6 +59,7 @@ public class IntervalTimer : IIntervalTimer
     public virtual void Update(TimeSpan delta)
     {
         IntervalElapsed = false;
+
         //add delta to elapsed
         Elapsed += delta;
 
