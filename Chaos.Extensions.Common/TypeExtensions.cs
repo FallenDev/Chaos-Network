@@ -9,14 +9,30 @@ namespace Chaos.Extensions.Common;
 public static class TypeExtensions
 {
     /// <summary>
+    ///     Recursively enumerates all properties on a complex object, only returning the PropertyInfo objects of primitive or
+    ///     string properties
+    /// </summary>
+    public static IEnumerable<PropertyInfo> EnumerateProperties(this Type type)
+    {
+        foreach (var property in type.GetProperties())
+            if (property.PropertyType is { IsClass: true, IsValueType: false, IsPrimitive: false }
+                && (property.PropertyType != typeof(string)))
+                foreach (var nestedProperty in property.PropertyType.EnumerateProperties())
+                    yield return nestedProperty;
+            else
+                yield return property;
+    }
+
+    /// <summary>
     ///     Extracts the generic base type that use a generic type definition within the hierarchy of the type.
     /// </summary>
-    /// <param name="type"></param>
-    /// <param name="genericBaseType">
-    ///     A generic type definition (non-interface). (The type of a generic without the type params
-    ///     specified)
+    /// <param name="type">
     /// </param>
-    /// <returns></returns>
+    /// <param name="genericBaseType">
+    ///     A generic type definition (non-interface). (The type of a generic without the type params specified)
+    /// </param>
+    /// <returns>
+    /// </returns>
     public static Type? ExtractGenericBaseType(this Type type, Type genericBaseType)
     {
         var current = type;
@@ -35,10 +51,10 @@ public static class TypeExtensions
     /// <summary>
     ///     Extracts all generic interfaces types from a generic type definition within the hierarchy of the type.
     /// </summary>
-    /// <param name="type"></param>
+    /// <param name="type">
+    /// </param>
     /// <param name="genericInterfaceType">
-    ///     A generic type definition of an interface. (The type of a generic without the type
-    ///     params specified)
+    ///     A generic type definition of an interface. (The type of a generic without the type params specified)
     /// </param>
     public static IEnumerable<Type> ExtractGenericInterfaces(this Type type, Type genericInterfaceType)
     {
@@ -62,6 +78,19 @@ public static class TypeExtensions
 
             current = current.BaseType;
         }
+    }
+
+    /// <summary>
+    ///     Gets a generic method from a type
+    /// </summary>
+    public static MethodInfo? GetGenericMethod(this Type type, string methodName, Type[] genericTypes)
+    {
+        var method = type.GetMethod(methodName);
+
+        if (method == null)
+            return null;
+
+        return method.MakeGenericMethod(genericTypes);
     }
 
     /// <summary>
@@ -89,7 +118,15 @@ public static class TypeExtensions
     /// <summary>
     ///     Determines whether a type inherits from an interface
     /// </summary>
-    /// <returns><c>true</c> if the type implements the interface, otherwise <c>false</c></returns>
+    /// <returns>
+    ///     <c>
+    ///         true
+    ///     </c>
+    ///     if the type implements the interface, otherwise
+    ///     <c>
+    ///         false
+    ///     </c>
+    /// </returns>
     public static bool HasInterface(this Type type, Type interfaceType)
     {
         foreach (var iType in type.GetInterfaces())
@@ -106,9 +143,16 @@ public static class TypeExtensions
     /// <summary>
     ///     Determines if a type is a compiler generated type.
     /// </summary>
-    /// <returns><c>true</c> if the type is compiler generated, otherwise <c>false</c></returns>
-    public static bool IsCompilerGenerated(this Type type) =>
-        type.GetCustomAttribute<CompilerGeneratedAttribute>() != null;
+    /// <returns>
+    ///     <c>
+    ///         true
+    ///     </c>
+    ///     if the type is compiler generated, otherwise
+    ///     <c>
+    ///         false
+    ///     </c>
+    /// </returns>
+    public static bool IsCompilerGenerated(this Type type) => type.GetCustomAttribute<CompilerGeneratedAttribute>() != null;
 
     /// <summary>
     ///     Returns all constructable types that inherit from the specified type.

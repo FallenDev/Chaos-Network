@@ -8,10 +8,35 @@ namespace Chaos.Extensions.Common;
 public static class EnumExtensions
 {
     /// <summary>
+    ///     Gets the names of the enum values of the specified type
+    /// </summary>
+    public static IEnumerable<string> GetEnumNames<T>()
+    {
+        var type = typeof(T);
+        var underlyingType = Nullable.GetUnderlyingType(type);
+
+        if (underlyingType is not null)
+            type = underlyingType;
+
+        if (!type.IsEnum)
+            throw new InvalidOperationException($"{type.Name} is not an enum");
+
+        if (underlyingType is not null)
+            return Enum.GetNames(type)
+                       .Prepend(string.Empty);
+
+        return Enum.GetNames(type);
+    }
+
+    /// <summary>
     ///     Gets the individual flag parts of a flag enum value />
     /// </summary>
-    /// <param name="input">An enum value with one or more flags</param>
-    /// <typeparam name="T">An enum type</typeparam>
+    /// <param name="input">
+    ///     An enum value with one or more flags
+    /// </param>
+    /// <typeparam name="T">
+    ///     An enum type
+    /// </typeparam>
     public static IEnumerable<T> GetFlags<T>(this T input) where T: Enum
     {
         foreach (T value in Enum.GetValues(input.GetType()))
@@ -22,9 +47,15 @@ public static class EnumExtensions
     /// <summary>
     ///     Converts an <see cref="EquipmentType" /> to one or more <see cref="EquipmentSlot" />s
     /// </summary>
-    /// <param name="type">An <see cref="EquipmentType" /> value</param>
-    /// <returns>One or more <see cref="EquipmentSlot" />s associated with the given <see cref="EquipmentType" /></returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when the given <see cref="EquipmentType" /> is not defined</exception>
+    /// <param name="type">
+    ///     An <see cref="EquipmentType" /> value
+    /// </param>
+    /// <returns>
+    ///     One or more <see cref="EquipmentSlot" />s associated with the given <see cref="EquipmentType" />
+    /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    ///     Thrown when the given <see cref="EquipmentType" /> is not defined
+    /// </exception>
     public static IEnumerable<EquipmentSlot> ToEquipmentSlots(this EquipmentType type)
     {
         switch (type)

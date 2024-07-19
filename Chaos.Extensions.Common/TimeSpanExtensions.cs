@@ -12,21 +12,34 @@ public static class TimeSpanExtensions
     /// <summary>
     ///     Converts a <see cref="TimeSpan" /> to a human-readable string
     /// </summary>
-    /// <param name="timeSpan">The timespan to convert</param>
-    /// <param name="showMilliseconds">Whether or not to show the milliseconds component</param>
-    /// <param name="showSeconds">Whether or not to show the seconds component</param>
-    /// <param name="showMinutes">Whether or not to show the minutes component</param>
-    /// <param name="showHours">Whether or not to show the hours component</param>
-    /// <param name="showDays">Whether or not to show the days component</param>
-    /// <returns>A string representing the given date-time in a more easily human readable format</returns>
+    /// <param name="timeSpan">
+    ///     The timespan to convert
+    /// </param>
+    /// <param name="showMilliseconds">
+    ///     Whether or not to show the milliseconds component
+    /// </param>
+    /// <param name="showSeconds">
+    ///     Whether or not to show the seconds component
+    /// </param>
+    /// <param name="showMinutes">
+    ///     Whether or not to show the minutes component
+    /// </param>
+    /// <param name="showHours">
+    ///     Whether or not to show the hours component
+    /// </param>
+    /// <param name="showDays">
+    ///     Whether or not to show the days component
+    /// </param>
+    /// <returns>
+    ///     A string representing the given date-time in a more easily human readable format
+    /// </returns>
     public static string ToReadableString(
         this TimeSpan timeSpan,
         bool showMilliseconds = false,
         bool showSeconds = true,
         bool showMinutes = true,
         bool showHours = true,
-        bool showDays = true
-    )
+        bool showDays = true)
     {
         var sb = new StringBuilder();
 
@@ -58,6 +71,7 @@ public static class TimeSpanExtensions
             if (timeSpan.Milliseconds > 0)
                 sb.Append($"{timeSpan.Milliseconds}ms ");
 
-        return sb.ToString().Trim();
+        return sb.ToString()
+                 .Trim();
     }
 }
