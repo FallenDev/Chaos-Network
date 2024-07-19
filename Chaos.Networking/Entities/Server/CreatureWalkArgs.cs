@@ -8,7 +8,7 @@ namespace Chaos.Networking.Entities.Server;
 ///     Represents the serialization of the <see cref="Chaos.Packets.Abstractions.Definitions.ServerOpCode.CreatureWalk" />
 ///     packet
 /// </summary>
-public sealed record CreatureWalkArgs : ISendArgs
+public sealed record CreatureWalkArgs : IPacketSerializable
 {
     /// <summary>
     ///     The direction the creature should walk towards
@@ -19,6 +19,7 @@ public sealed record CreatureWalkArgs : ISendArgs
     ///     The point the creature is supposed to be walking from
     /// </summary>
     public IPoint OldPoint { get; set; } = null!;
+
     /// <summary>
     ///     The id of the creature
     /// </summary>

@@ -11,15 +11,19 @@ public sealed class ServerTable : IServerTable
 {
     /// <inheritdoc />
     public uint CheckSum { get; }
+
     /// <inheritdoc />
     public byte[] Data { get; }
+
     /// <inheritdoc />
     public Dictionary<byte, ILoginServerInfo> Servers { get; }
 
     /// <summary>
     ///     Creates a new <see cref="ServerTable" /> instance
     /// </summary>
-    /// <param name="servers">A collection of server information used to create the server table</param>
+    /// <param name="servers">
+    ///     A collection of server information used to create the server table
+    /// </param>
     public ServerTable(ICollection<ILoginServerInfo> servers)
     {
         Servers = servers.ToDictionary(info => info.Id);
@@ -41,7 +45,7 @@ public sealed class ServerTable : IServerTable
         var data = spanWriter.ToSpan();
 
         CheckSum = Crc.Generate32(data);
-        ZLIB.Compress(ref data);
+        Zlib.Compress(ref data);
 
         Data = data.ToArray();
     }

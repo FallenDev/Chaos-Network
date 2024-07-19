@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -5,77 +6,95 @@ using Chaos.Common.Identity;
 using Chaos.Common.Synchronization;
 using Chaos.Cryptography.Abstractions;
 using Chaos.Extensions.Networking;
-using Chaos.IO.Memory;
-using Chaos.Networking.Entities.Server;
 using Chaos.NLog.Logging.Definitions;
 using Chaos.NLog.Logging.Extensions;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
-using Chaos.Packets.Abstractions.Definitions;
 using Microsoft.Extensions.Logging;
 
 namespace Chaos.Networking.Abstractions;
 
 /// <summary>
-///     Provides the ability to send and receive packets to and from a client over a socket
+///     Provides the ability to send and receive packets over a socket
 /// </summary>
 public abstract class SocketClientBase : ISocketClient, IDisposable
 {
-    private readonly Memory<byte> MemoryBuffer;
     private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
     private int Count;
     private int Sequence;
+
     /// <inheritdoc />
     public bool Connected { get; set; }
+
     /// <inheritdoc />
     public ICrypto Crypto { get; set; }
+
     /// <summary>
     ///     Whether or not to log raw packet data to Trace
     /// </summary>
     public bool LogRawPackets { get; set; }
+
     /// <inheritdoc />
     public uint Id { get; }
+
     /// <summary>
     ///     The logger for logging client-related events
     /// </summary>
     protected ILogger<SocketClientBase> Logger { get; }
+
+    private MemoryHandle MemoryHandle { get; }
+
+    private IMemoryOwner<byte> MemoryOwner { get; }
+
     /// <summary>
     ///     The packet serializer for serializing and deserializing packets
     /// </summary>
     protected IPacketSerializer PacketSerializer { get; }
+
     /// <inheritdoc />
     public FifoSemaphoreSlim ReceiveSync { get; }
+
     /// <inheritdoc />
     public IPAddress RemoteIp { get; }
+
     /// <inheritdoc />
     public Socket Socket { get; }
-    private Span<byte> Buffer => MemoryBuffer.Span;
+
+    private unsafe Span<byte> Buffer => new(MemoryHandle.Pointer, ushort.MaxValue * 4);
+
+    private Memory<byte> Memory => MemoryOwner.Memory;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="SocketClientBase" /> class.
     /// </summary>
-    /// <param name="socket"></param>
-    /// <param name="crypto"></param>
-    /// <param name="packetSerializer"></param>
-    /// <param name="logger"></param>
+    /// <param name="socket">
+    /// </param>
+    /// <param name="crypto">
+    /// </param>
+    /// <param name="packetSerializer">
+    /// </param>
+    /// <param name="logger">
+    /// </param>
     protected SocketClientBase(
         Socket socket,
         ICrypto crypto,
         IPacketSerializer packetSerializer,
-        ILogger<SocketClientBase> logger
-    )
+        ILogger<SocketClientBase> logger)
     {
         Id = SequentialIdGenerator<uint>.Shared.NextId;
-        ReceiveSync = new FifoSemaphoreSlim(1, 1);
         Socket = socket;
-        RemoteIp = (socket.RemoteEndPoint as IPEndPoint)?.Address!;
         Crypto = crypto;
-        var buffer = new byte[ushort.MaxValue];
-        MemoryBuffer = new Memory<byte>(buffer);
+
+        //var buffer = new byte[ushort.MaxValue];
+        MemoryOwner = MemoryPool<byte>.Shared.Rent(ushort.MaxValue * 4);
+        MemoryHandle = Memory.Pin();
         Logger = logger;
         PacketSerializer = packetSerializer;
+        RemoteIp = (Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
+        ReceiveSync = new FifoSemaphoreSlim(1, 1, $"{GetType().Name} {RemoteIp} (Socket)");
 
-        var initialArgs = Enumerable.Range(0, 5).Select(_ => CreateArgs());
+        var initialArgs = Enumerable.Range(0, 5)
+                                    .Select(_ => CreateArgs());
         SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
         Connected = false;
     }
@@ -84,56 +103,48 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     public virtual void Dispose()
     {
         GC.SuppressFinalize(this);
-        Socket.Dispose();
+
+        try
+        {
+            MemoryHandle.Dispose();
+        } catch
+        {
+            //ignored
+        }
+
+        try
+        {
+            MemoryOwner.Dispose();
+        } catch
+        {
+            //ignored
+        }
+
+        try
+        {
+            Socket.Dispose();
+        } catch
+        {
+            //ignored
+        }
     }
 
     /// <inheritdoc />
     public event EventHandler? OnDisconnected;
 
+    #region Actions
+    /// <inheritdoc />
+    public virtual void SetSequence(byte newSequence) => Sequence = newSequence;
+    #endregion
+
     /// <summary>
     ///     Asynchronously handles a span buffer as a packet
     /// </summary>
-    /// <param name="span"></param>
-    /// <returns></returns>
+    /// <param name="span">
+    /// </param>
+    /// <returns>
+    /// </returns>
     protected abstract ValueTask HandlePacketAsync(Span<byte> span);
-
-    #region Actions
-    /// <inheritdoc />
-    public virtual void SendRedirect(IRedirect redirect)
-    {
-        var args = new RedirectArgs(redirect);
-
-        Send(args);
-    }
-
-    /// <inheritdoc />
-    public virtual void SetSequence(byte newSequence) => Sequence = newSequence;
-
-    /// <inheritdoc />
-    public virtual void SendHeartBeat(byte first, byte second)
-    {
-        var args = new HeartBeatResponseArgs
-        {
-            First = first,
-            Second = second
-        };
-
-        Send(args);
-    }
-
-    /// <inheritdoc />
-    public virtual void SendAcceptConnection()
-    {
-        var packet = new ServerPacket(ServerOpCode.AcceptConnection);
-        var writer = new SpanWriter(PacketSerializer.Encoding);
-
-        writer.WriteByte(27);
-        writer.WriteString("CONNECTED SERVER", true);
-        packet.Buffer = writer.ToSpan();
-
-        Send(ref packet);
-    }
-    #endregion
 
     #region Networking
     /// <inheritdoc />
@@ -143,23 +154,15 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         await Task.Yield();
 
         var args = new SocketAsyncEventArgs();
-        args.SetBuffer(MemoryBuffer);
+        args.SetBuffer(Memory);
         args.Completed += ReceiveEventHandler;
         Socket.ReceiveAndForget(args, ReceiveEventHandler);
     }
 
-    /// <inheritdoc />
-    public virtual bool IsLoopback()
-    {
-        if (Socket.RemoteEndPoint is IPEndPoint ipEndPoint)
-            return IPAddress.IsLoopback(ipEndPoint.Address);
-
-        return false;
-    }
-
     private async void ReceiveEventHandler(object? sender, SocketAsyncEventArgs e)
     {
-        await ReceiveSync.WaitAsync().ConfigureAwait(false);
+        await ReceiveSync.WaitAsync()
+                         .ConfigureAwait(false);
 
         try
         {
@@ -192,13 +195,17 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
                 try
                 {
-                    await HandlePacketAsync(MemoryBuffer.Span.Slice(offset, packetLength));
+                    await HandlePacketAsync(Buffer.Slice(offset, packetLength))
+                        .ConfigureAwait(false);
                 } catch (Exception ex)
                 {
+                    //required so we can use Span<byte> in an async method
                     void InnerCatch()
                     {
-                        var buffer = MemoryBuffer.Span.TrimEnd((byte)0);
-                        var hex = BitConverter.ToString(buffer.ToArray()).Replace("-", " ");
+                        var buffer = Buffer.TrimEnd((byte)0);
+
+                        var hex = BitConverter.ToString(buffer.ToArray())
+                                              .Replace("-", " ");
                         var ascii = Encoding.ASCII.GetString(buffer);
 
                         Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet, Topics.Actions.Processing)
@@ -206,7 +213,8 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                               .LogError(
                                   ex,
                                   "Exception while handling a packet for {@ClientType}. (Count: {Count}, Offset: {Offset}, BufferHex: {BufferHex}, BufferAscii: {BufferAscii})",
-                                  GetType().Name,
+                                  GetType()
+                                      .Name,
                                   Count,
                                   offset,
                                   hex,
@@ -229,9 +237,10 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
             //if we received the first few bytes of a new packet, they wont be at the beginning of the buffer
             //copy those couple bytes to the beginning of the buffer
             if (Count > 0)
-                MemoryBuffer.Slice(offset, Count).CopyTo(MemoryBuffer);
+                Buffer.Slice(offset, Count)
+                      .CopyTo(Buffer);
 
-            e.SetBuffer(MemoryBuffer[Count..]);
+            e.SetBuffer(Memory[Count..]);
             Socket.ReceiveAndForget(e, ReceiveEventHandler);
         } catch (Exception)
         {
@@ -245,14 +254,14 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     }
 
     /// <inheritdoc />
-    public virtual void Send<T>(T obj) where T: ISendArgs
+    public virtual void Send<T>(T obj) where T: IPacketSerializable
     {
         var packet = PacketSerializer.Serialize(obj);
         Send(ref packet);
     }
 
     /// <inheritdoc />
-    public virtual void Send(ref ServerPacket packet)
+    public virtual void Send(ref Packet packet)
     {
         if (!Connected)
             return;
@@ -268,37 +277,42 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                   .WithProperty(this)
                   .LogTrace("[Snd] {Packet}", packet.ToString());
 
-        packet.ShouldEncrypt = Crypto.ShouldEncrypt((byte)packet.OpCode);
+        packet.IsEncrypted = IsEncrypted(packet.OpCode);
 
-        if (packet.ShouldEncrypt)
+        if (packet.IsEncrypted)
         {
-            packet.Sequence = (byte)Interlocked.Increment(ref Sequence);
+            packet.Sequence = (byte)(Interlocked.Increment(ref Sequence) - 1);
 
-            Crypto.Encrypt(ref packet);
+            Encrypt(ref packet);
         }
 
         var args = DequeueArgs(packet.ToMemory());
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
+    /// <summary>
+    ///     Whether or not the packet with the specified opcode should be encrypted
+    /// </summary>
+    public abstract bool IsEncrypted(byte opCode);
+
+    /// <summary>
+    ///     Encrypts the packet
+    /// </summary>
+    public abstract void Encrypt(ref Packet packet);
+
     /// <inheritdoc />
     public virtual void Disconnect()
     {
+        if (!Connected)
+            return;
+
         Connected = false;
 
         try
         {
-            Socket.Close(0);
-        }
-        catch
-        {
-            //ignored
-        }
-
-        try
-        {
-            if (Socket.Connected)
-                Socket.Disconnect(false);
+            //shutdown the socket so that we dont receive any more data
+            //allow sending incase OnDisconnected sends something
+            Socket.Shutdown(SocketShutdown.Receive);
         } catch
         {
             //ignored
@@ -312,13 +326,13 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
             //ignored
         }
 
+        //will close/dispose the socket
         Dispose();
     }
     #endregion
 
     #region Utility
-    private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e) =>
-        SocketArgsQueue.Enqueue(e);
+    private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e) => SocketArgsQueue.Enqueue(e);
 
     private SocketAsyncEventArgs CreateArgs()
     {

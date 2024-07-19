@@ -7,7 +7,7 @@ namespace Chaos.Networking.Entities.Server;
 ///     Represents the serialization of the
 ///     <see cref="Chaos.Packets.Abstractions.Definitions.ServerOpCode.ForceClientPacket" /> packet
 /// </summary>
-public sealed record ForceClientPacketArgs : ISendArgs
+public sealed record ForceClientPacketArgs : IPacketSerializable
 {
     /// <summary>
     ///     The opcode of the packet the server is forcing the client to send back to it
@@ -17,5 +17,5 @@ public sealed record ForceClientPacketArgs : ISendArgs
     /// <summary>
     ///     The data of the packet the server is forcing the client to send back to it
     /// </summary>
-    public byte[] Data { get; set; } = [];
+    public byte[] Data { get; set; } = Array.Empty<byte>();
 }

@@ -10,50 +10,45 @@ public sealed record ItemInfo
     /// <summary>
     ///     The color of the item
     /// </summary>
-    public required DisplayColor Color { get; init; } = DisplayColor.Default;
+    public DisplayColor Color { get; init; }
 
     /// <summary>
     ///     The cost of the item
     /// </summary>
-    public required int? Cost { get; init; } = 0;
+    public int? Cost { get; init; }
 
     /// <summary>
     ///     The count of the item
     /// </summary>
-    public required uint? Count { get; init; } = 0;
+    public uint? Count { get; init; }
 
     /// <summary>
     ///     The current durability of the item
     /// </summary>
-    public required int CurrentDurability { get; init; } = 0;
+    public int CurrentDurability { get; init; }
 
     /// <summary>
     ///     The maximum durability of the item
     /// </summary>
-    public required int MaxDurability { get; init; } = 0;
+    public int MaxDurability { get; init; }
 
     /// <summary>
     ///     The name of the item
     /// </summary>
-    public required string Name { get; init; } = "";
-
-    /// <summary>
-    ///     The group of the item
-    /// </summary>
-    public required string Group { get; init; } = "";
+    public string Name { get; init; } = null!;
 
     /// <summary>
     ///     The slot of the item
     /// </summary>
-    public required byte Slot { get; init; } = 0;
+    public byte Slot { get; init; }
 
     /// <summary>
     ///     The sprite of the item
     /// </summary>
-    public required ushort Sprite { get; init; } = 0;
+    public ushort Sprite { get; init; }
 
     /// <summary>
     ///     Whether or not the item is stackable
     /// </summary>
-    public required bool Stackable { get; init; } = false;
+    public bool Stackable { get; init; }
 }

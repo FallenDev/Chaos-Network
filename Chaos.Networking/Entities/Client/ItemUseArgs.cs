@@ -1,10 +1,15 @@
 using Chaos.Packets.Abstractions;
+using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Networking.Entities.Client;
 
 /// <summary>
-///     Represents the serialization of the <see cref="Chaos.Packets.Abstractions.Definitions.ClientOpCode.UseItem" />
-///     packet
+///     Represents the serialization of the <see cref="ClientOpCode.ItemUse" /> packet
 /// </summary>
-/// <param name="SourceSlot">The slot of the item the client is trying to use</param>
-public sealed record ItemUseArgs(byte SourceSlot) : IReceiveArgs;
+public sealed record ItemUseArgs : IPacketSerializable
+{
+    /// <summary>
+    ///     The slot of the item the client is trying to use
+    /// </summary>
+    public required byte SourceSlot { get; set; }
+}
