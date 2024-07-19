@@ -18,10 +18,6 @@
 		<IsTrimmable>False</IsTrimmable>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="zlib.net-mutliplatform" Version="1.0.6" />
-	</ItemGroup>
-	<ItemGroup>
-		<ProjectReference Include="..\Chaos.Extensions.Common\Chaos.Extensions.Common.csproj" />
 		<InternalsVisibleTo Include="Chaos.IO.Tests" />
 	</ItemGroup>
 </Project>
