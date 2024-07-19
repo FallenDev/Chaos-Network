@@ -16,6 +16,7 @@ public interface ISocketClient
     ///     Handles encryption and decryption of packets
     /// </summary>
     ICrypto Crypto { get; set; }
+
     /// <summary>
     ///     Whether or not the client is connected
     /// </summary>
@@ -35,6 +36,7 @@ public interface ISocketClient
     ///     The remote endpoint of the client
     /// </summary>
     IPAddress RemoteIp { get; }
+
     /// <summary>
     ///     The socket that the client is connected to
     /// </summary>
@@ -52,11 +54,6 @@ public interface ISocketClient
     void Disconnect();
 
     /// <summary>
-    ///     Determins whether or not the client is a loopback client or not (client is on same server as ip)
-    /// </summary>
-    bool IsLoopback();
-
-    /// <summary>
     ///     An event that is called when a client disconnects
     /// </summary>
     event EventHandler? OnDisconnected;
@@ -64,36 +61,24 @@ public interface ISocketClient
     /// <summary>
     ///     Serializes an object and sends it to the client
     /// </summary>
-    /// <param name="obj">The object to be serialized and sent</param>
+    /// <param name="obj">
+    ///     The object to be serialized and sent
+    /// </param>
     /// <typeparam name="T">
-    ///     The type must inherit <see cref="Chaos.Packets.Abstractions.ISendArgs" />
-    ///     and have a <see cref="Chaos.Packets.Abstractions.IServerPacketSerializer{T}" /> created for it
+    ///     The type must inherit <see cref="Chaos.Packets.Abstractions.IPacketSerializable" /> and have a
+    ///     <see cref="IPacketConverter{T}" /> created for it
     /// </typeparam>
-    void Send<T>(T obj) where T: ISendArgs;
+    void Send<T>(T obj) where T: IPacketSerializable;
 
     /// <summary>
     ///     Sends a packet to the client
     /// </summary>
-    void Send(ref ServerPacket packet);
-
-    /// <summary>
-    ///     Used when a client connects to response with a string
-    /// </summary>
-    void SendAcceptConnection();
-
-    /// <summary>
-    ///     Used to response to a client heart beat
-    /// </summary>
-    void SendHeartBeat(byte first, byte second);
-
-    /// <summary>
-    ///     Used to redirect the client to another server
-    /// </summary>
-    void SendRedirect(IRedirect redirect);
+    void Send(ref Packet packet);
 
     /// <summary>
     ///     Used when a client requests to change the packet sequence
     /// </summary>
-    /// <param name="newSequence"></param>
+    /// <param name="newSequence">
+    /// </param>
     void SetSequence(byte newSequence);
 }
