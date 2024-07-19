@@ -1,5 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using Chaos.IO.Exceptions;
+using Chaos.IO.FileSystem;
+using Chaos.IO.Json;
 
 namespace Chaos.Common.Utilities;
 
@@ -12,92 +15,108 @@ public static class JsonSerializerEx
     /// <summary>
     ///     Deserializes a file from the specified path
     /// </summary>
-    /// <param name="path">The path to deserialize from</param>
-    /// <param name="options">The serialization options to use</param>
-    /// <typeparam name="T">The type to deserialize into</typeparam>
+    /// <param name="path">
+    ///     The path to deserialize from
+    /// </param>
+    /// <param name="options">
+    ///     The serialization options to use
+    /// </param>
+    /// <typeparam name="T">
+    ///     The type to deserialize into
+    /// </typeparam>
+    /// <exception cref="IOException">
+    ///     Failed to deserialize object from file, temp file, or backup file. See inner exception for details.
+    /// </exception>
     public static T? Deserialize<T>(string path, JsonSerializerOptions options)
-    {
-        using var stream = File.Open(
+        => FileEx.SafeOpenRead(
             path,
-            new FileStreamOptions
+            stream =>
             {
-                Access = FileAccess.Read,
-                Mode = FileMode.Open,
-                Options = FileOptions.SequentialScan,
-                Share = FileShare.ReadWrite
+                //corrupted files will not be valid json
+                //we can try loading a backup for corrupted files
+                //corrupted files will not be valid json
+                //we can try loading a backup for corrupted files
+                try
+                {
+                    JsonValidator.EnsureValidJson(stream);
+                } catch (Exception e)
+                {
+                    throw new RetryableException("Stream content is not valid json.", e);
+                }
+
+                return JsonSerializer.Deserialize<T>(stream, options);
             });
-
-        var ret = JsonSerializer.Deserialize<T>(stream, options);
-
-        return ret;
-    }
 
     /// <summary>
     ///     Asynchronously deserializes a file from the specified path
     /// </summary>
-    /// <param name="path">The path to deserialize from</param>
-    /// <param name="options">The serialization options to use</param>
-    /// <typeparam name="T">The type to deserialize into</typeparam>
-    public static async Task<T?> DeserializeAsync<T>(string path, JsonSerializerOptions options)
-    {
-        await using var stream = File.Open(
+    /// <param name="path">
+    ///     The path to deserialize from
+    /// </param>
+    /// <param name="options">
+    ///     The serialization options to use
+    /// </param>
+    /// <typeparam name="T">
+    ///     The type to deserialize into
+    /// </typeparam>
+    /// <exception cref="IOException">
+    ///     Failed to deserialize object from file, temp file, or backup file. See inner exception for details.
+    /// </exception>
+    public static Task<T?> DeserializeAsync<T>(string path, JsonSerializerOptions options)
+        => FileEx.SafeOpenReadAsync(
             path,
-            new FileStreamOptions
+            async stream =>
             {
-                Access = FileAccess.Read,
-                Mode = FileMode.Open,
-                Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
-                Share = FileShare.ReadWrite
+                //corrupted files will not be valid json
+                //we can try loading a backup for corrupted files
+                //corrupted files will not be valid json
+                //we can try loading a backup for corrupted files
+                try
+                {
+                    JsonValidator.EnsureValidJson(stream);
+                } catch (Exception e)
+                {
+                    throw new RetryableException("Stream content is not valid json.", e);
+                }
+
+                return await JsonSerializer.DeserializeAsync<T>(stream, options);
             });
-
-        var ret = await JsonSerializer.DeserializeAsync<T>(stream, options);
-
-        return ret;
-    }
 
     /// <summary>
     ///     Serializes an object to the specified path
     /// </summary>
-    /// <param name="path">The path to serialize the object to</param>
-    /// <param name="value">The object to be serialized</param>
-    /// <param name="options">The serialization options to use</param>
+    /// <param name="path">
+    ///     The path to serialize the object to
+    /// </param>
+    /// <param name="value">
+    ///     The object to be serialized
+    /// </param>
+    /// <param name="options">
+    ///     The serialization options to use
+    /// </param>
     public static void Serialize(string path, object value, JsonSerializerOptions options)
     {
-        using var stream = File.Open(
-            path,
-            new FileStreamOptions
-            {
-                Access = FileAccess.ReadWrite,
-                Mode = FileMode.OpenOrCreate,
-                Options = FileOptions.SequentialScan,
-                Share = FileShare.ReadWrite
-            });
+        var json = JsonSerializer.Serialize(value, options);
 
-        stream.SetLength(0);
-
-        JsonSerializer.Serialize(stream, value, options);
+        FileEx.SafeWriteAllText(path, json);
     }
 
     /// <summary>
     ///     Serializes an object to the specified path
     /// </summary>
-    /// <param name="path">The path to serialize the object to</param>
-    /// <param name="value">The object to be serialized</param>
-    /// <param name="options">The serialization options to use</param>
-    public static async Task SerializeAsync(string path, object value, JsonSerializerOptions options)
+    /// <param name="path">
+    ///     The path to serialize the object to
+    /// </param>
+    /// <param name="value">
+    ///     The object to be serialized
+    /// </param>
+    /// <param name="options">
+    ///     The serialization options to use
+    /// </param>
+    public static Task SerializeAsync(string path, object value, JsonSerializerOptions options)
     {
-        await using var stream = File.Open(
-            path,
-            new FileStreamOptions
-            {
-                Access = FileAccess.ReadWrite,
-                Mode = FileMode.OpenOrCreate,
-                Options = FileOptions.Asynchronous | FileOptions.SequentialScan,
-                Share = FileShare.ReadWrite
-            });
+        var json = JsonSerializer.Serialize(value, options);
 
-        stream.SetLength(0);
-
-        await JsonSerializer.SerializeAsync(stream, value, options);
+        return FileEx.SafeWriteAllTextAsync(path, json);
     }
 }

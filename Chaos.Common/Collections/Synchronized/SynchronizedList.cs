@@ -1,12 +1,12 @@
 using System.Collections;
 using Chaos.Common.Synchronization;
 
-namespace Chaos.Common.Collections.Synchronized;
+// ReSharper disable once CheckNamespace
+namespace Chaos.Collections.Synchronized;
 
 /// <summary>
 ///     Wraps a <see cref="System.Collections.Generic.List{T}" />, entering a lock for each of it's methods. Enumeration
-///     will occur on a
-///     snapshot.
+///     will occur on a snapshot.
 /// </summary>
 /// <inheritdoc cref="System.Collections.Generic.List{T}" />
 public class SynchronizedList<T> : IList<T>, IReadOnlyList<T>
@@ -15,6 +15,7 @@ public class SynchronizedList<T> : IList<T>, IReadOnlyList<T>
     ///     The underlying <see cref="System.Collections.Generic.List{T}" />
     /// </summary>
     protected readonly List<T> List;
+
     /// <summary>
     ///     The <see cref="AutoReleasingMonitor" /> used to synchronize access to the <see cref="List" />
     /// </summary>
@@ -29,6 +30,7 @@ public class SynchronizedList<T> : IList<T>, IReadOnlyList<T>
 
             return List[index];
         }
+
         set
         {
             using var @lock = Sync.Enter();
@@ -53,7 +55,9 @@ public class SynchronizedList<T> : IList<T>, IReadOnlyList<T>
     /// <summary>
     ///     Creates a new <see cref="SynchronizedList{T}" />
     /// </summary>
-    /// <param name="items">An optional sequence of initial items to add to the collection</param>
+    /// <param name="items">
+    ///     An optional sequence of initial items to add to the collection
+    /// </param>
     public SynchronizedList(IEnumerable<T>? items = null)
     {
         Sync = new AutoReleasingMonitor();

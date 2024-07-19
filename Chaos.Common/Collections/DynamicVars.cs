@@ -21,8 +21,12 @@ public sealed class DynamicVars : IEnumerable<KeyValuePair<string, JsonElement>>
     /// <summary>
     ///     Initializes a new instance of the DynamicVars class with an optional initial set of key-value pairs.
     /// </summary>
-    /// <param name="collection">A collection of key-value pairs to initially populate the collection with</param>
-    /// <param name="options">The options to use when deserializing jsonElements</param>
+    /// <param name="collection">
+    ///     A collection of key-value pairs to initially populate the collection with
+    /// </param>
+    /// <param name="options">
+    ///     The options to use when deserializing jsonElements
+    /// </param>
     public DynamicVars(IDictionary<string, JsonElement> collection, JsonSerializerOptions options)
     {
         JsonOptions = options;
@@ -33,9 +37,15 @@ public sealed class DynamicVars : IEnumerable<KeyValuePair<string, JsonElement>>
     /// <summary>
     ///     Initializes a new instance of the DynamicVars class with an optional initial set of key-value pairs.
     /// </summary>
-    /// <param name="collection">A collection of key-value pairs to initially populate the collection with</param>
-    /// <param name="valueCache">A collection of values that have already been converted from the vars</param>
-    /// <param name="options">The options to use when deserializing jsonElements</param>
+    /// <param name="collection">
+    ///     A collection of key-value pairs to initially populate the collection with
+    /// </param>
+    /// <param name="valueCache">
+    ///     A collection of values that have already been converted from the vars
+    /// </param>
+    /// <param name="options">
+    ///     The options to use when deserializing jsonElements
+    /// </param>
     public DynamicVars(IDictionary<string, JsonElement> collection, IDictionary<string, object?> valueCache, JsonSerializerOptions options)
     {
         JsonOptions = options;
@@ -46,7 +56,9 @@ public sealed class DynamicVars : IEnumerable<KeyValuePair<string, JsonElement>>
     /// <summary>
     ///     Initializes a new instance of the DynamicVars class
     /// </summary>
-    /// <param name="options">The options to use when deserializing jsonElements</param>
+    /// <param name="options">
+    ///     The options to use when deserializing jsonElements
+    /// </param>
     public DynamicVars(JsonSerializerOptions options)
     {
         JsonOptions = options;
@@ -61,8 +73,8 @@ public sealed class DynamicVars : IEnumerable<KeyValuePair<string, JsonElement>>
     public T? Get<T>(string key) => Get(typeof(T), key) is T t ? t : default;
 
     /// <inheritdoc />
-    public object? Get(Type type, string key) =>
-        ValueCache.GetOrAdd(
+    public object? Get(Type type, string key)
+        => ValueCache.GetOrAdd(
             key,
             static (k, v) => GetValue(
                 v.Type,
@@ -78,8 +90,8 @@ public sealed class DynamicVars : IEnumerable<KeyValuePair<string, JsonElement>>
     public IEnumerator<KeyValuePair<string, JsonElement>> GetEnumerator() => Vars.GetEnumerator();
 
     /// <inheritdoc />
-    public T GetRequired<T>(string key) =>
-        Vars.TryGetValue(key, out var value)
+    public T GetRequired<T>(string key)
+        => Vars.TryGetValue(key, out var value)
             ? value.Deserialize<T>(JsonOptions)!
             : throw new KeyNotFoundException($"Required key \"{key}\" was not found while populating script variables");
 
@@ -87,8 +99,7 @@ public sealed class DynamicVars : IEnumerable<KeyValuePair<string, JsonElement>>
         Type type,
         string key,
         IDictionary<string, JsonElement> lookup,
-        JsonSerializerOptions jsonOptions
-    )
+        JsonSerializerOptions jsonOptions)
     {
         if (!lookup.TryGetValue(key, out var value))
             return default;

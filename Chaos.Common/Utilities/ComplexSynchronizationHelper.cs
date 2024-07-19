@@ -12,17 +12,24 @@ public static class ComplexSynchronizationHelper
     /// <summary>
     ///     Waits for all of the provided semaphores to be available, or for the overall timeout to be reached
     /// </summary>
-    /// <param name="overallTimeout">The overall timeout for synchronizing all given semaphores</param>
-    /// <param name="individualTimeout">The timeout of each attempt to enter a semaphore</param>
-    /// <param name="synchronizers">One or more semaphores to be synchronized</param>
-    /// <returns>An object that when disposed will release all of the semaphores that were entered</returns>
+    /// <param name="overallTimeout">
+    ///     The overall timeout for synchronizing all given semaphores
+    /// </param>
+    /// <param name="individualTimeout">
+    ///     The timeout of each attempt to enter a semaphore
+    /// </param>
+    /// <param name="synchronizers">
+    ///     One or more semaphores to be synchronized
+    /// </param>
+    /// <returns>
+    ///     An object that when disposed will release all of the semaphores that were entered
+    /// </returns>
     /// <exception cref="TimeoutException">
-    ///     The timeout period elapsed. The helper was unable to acquire all semaphores in the
-    ///     alotted time.
+    ///     The timeout period elapsed. The helper was unable to acquire all semaphores in the alotted time.
     /// </exception>
     /// <remarks>
-    ///     If a TimeoutException is thrown, the signature is the number of failed attempts to enter each semaphore,
-    ///     arranged in the same order the semaphores were provided to the method
+    ///     If a TimeoutException is thrown, the signature is the number of failed attempts to enter each semaphore, arranged
+    ///     in the same order the semaphores were provided to the method
     /// </remarks>
     public static async Task<IPolyDisposable> WaitAsync(
         TimeSpan overallTimeout,
@@ -34,10 +41,12 @@ public static class ComplexSynchronizationHelper
 
         var now = DateTime.UtcNow;
         var attemptSignature = new int[synchronizers.Length];
+        var attempts = 0;
 
         while (DateTime.UtcNow.Subtract(now) < overallTimeout)
         {
             var disposables = await Task.WhenAll(synchronizers.Select(async sync => await sync.WaitAsync(individualTimeout)));
+            attempts++;
 
             if (disposables.Any(disposable => disposable is null))
                 for (var i = 0; i < disposables.Length; i++)
@@ -53,8 +62,10 @@ public static class ComplexSynchronizationHelper
                 return new CompositePolyDisposable(disposables!);
         }
 
-        var attempts = attemptSignature.Sum();
-        var signature = string.Join(", ", attemptSignature);
+        var signature = string.Join(
+            ", ",
+            synchronizers.Zip(attemptSignature)
+                         .Select(set => $"{set.First.Name}: {set.Second}"));
 
         throw new TimeoutException(
             $"The timeout period elapsed. The helper was unable to acquire all semaphores in the alotted time. (Attempts: {attempts
@@ -62,11 +73,9 @@ public static class ComplexSynchronizationHelper
     }
 
     [ExcludeFromCodeCoverage(Justification = "Just a wrapper class")]
-    private sealed class CompositePolyDisposable : IPolyDisposable
+    private sealed class CompositePolyDisposable(params IPolyDisposable[] disposables) : IPolyDisposable
     {
-        private readonly List<IPolyDisposable> Dispoables;
-
-        public CompositePolyDisposable(params IPolyDisposable[] disposables) => Dispoables = disposables.ToList();
+        private readonly List<IPolyDisposable> Dispoables = disposables.ToList();
 
         /// <inheritdoc />
         public void Dispose()

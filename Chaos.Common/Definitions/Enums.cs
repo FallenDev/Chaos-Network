@@ -2,19 +2,18 @@
 namespace Chaos.Common.Definitions;
 
 #region Custom Stuff
+public enum ShardingType : byte
+{
+    None,
+    AbsolutePlayerLimit,
+    PlayerLimit,
+    AbsoluteGroupLimit
+}
 public enum RandomizationType
 {
     Balanced = 0,
     Positive = 1,
     Negative = 2
-}
-
-[Flags]
-public enum Status : ulong
-{
-    None = 0,
-    Dead = 1
-    //add more statuses here, double each time
 }
 
 [Flags]
@@ -63,10 +62,12 @@ public enum ServerType : byte
     ///     When you first open the client, you are in the lobby where you can choose a server to log in to
     /// </summary>
     Lobby = 0,
+
     /// <summary>
     ///     After choosing a server, you are redirected to a login server
     /// </summary>
     Login = 1,
+
     /// <summary>
     ///     After logging in, you are redirected to a world server.
     /// </summary>
@@ -79,10 +80,11 @@ public enum ServerType : byte
 public enum ServerTableRequestType : byte
 {
     /// <summary>
-    ///     When a user chooses a server from the server list, the Id of that server is sent to us.
-    ///     This is the Id from the server table.
+    ///     When a user chooses a server from the server list, the Id of that server is sent to us. This is the Id from the
+    ///     server table.
     /// </summary>
     ServerId = 0,
+
     /// <summary>
     ///     Requests the server table, which is a list of servers for the user to choose to join
     /// </summary>
@@ -98,6 +100,7 @@ public enum MetaDataRequestType : byte
     ///     The client is requesting the data for a specific metadata file
     /// </summary>
     DataByName = 0,
+
     /// <summary>
     ///     The client is requesting checksums of all metadata files, to ensure it has everything
     /// </summary>
@@ -115,65 +118,73 @@ public enum ServerMessageType : byte
     ///     Text appears blue, and appears in the top left
     /// </summary>
     Whisper = 0,
+
     /// <summary>
     ///     Text is only in the action bar, and will not show up in Shift+F
     /// </summary>
     OrangeBar1 = 1,
+
     /// <summary>
     ///     Text is only in the action bar, and will not show up in Shift+F
     /// </summary>
     OrangeBar2 = 2,
+
     /// <summary>
     ///     Texts appears in the action bar and Shift+F
     /// </summary>
     ActiveMessage = 3,
+
     /// <summary>
     ///     Text is only in the action bar, and will not show up in Shift+F
     /// </summary>
     OrangeBar3 = 4,
+
     /// <summary>
-    ///     Text is only in the action bar, and will not show up in Shift+F.
-    ///     In official this was used for admin world messages
+    ///     Text is only in the action bar, and will not show up in Shift+F. In official this was used for admin world messages
     /// </summary>
     AdminMessage = 5,
+
     /// <summary>
     ///     Text is only in the action bar, and will not show up in Shift+F
     /// </summary>
     OrangeBar5 = 6,
+
     /// <summary>
     ///     <see cref="Chaos.Common.Definitions.UserOption" />s are sent via this text channel
     /// </summary>
     UserOptions = 7,
+
     /// <summary>
-    ///     Pops open a window with a scroll bar.
-    ///     In official this was used for Sense
+    ///     Pops open a window with a scroll bar. In official this was used for Sense
     /// </summary>
     ScrollWindow = 8,
+
     /// <summary>
-    ///     Pops open a window with no scroll bar.
-    ///     In official this was used for perish lore
+    ///     Pops open a window with no scroll bar. In official this was used for perish lore
     /// </summary>
     NonScrollWindow = 9,
+
     /// <summary>
-    ///     Pops open a window with a wooden boarder.
-    ///     In official this was used for signposts and wooden boards
+    ///     Pops open a window with a wooden boarder. In official this was used for signposts and wooden boards
     /// </summary>
     WoodenBoard = 10,
+
     /// <summary>
-    ///     Text appears in a puke-green color.
-    ///     In official this was used for group chat
+    ///     Text appears in a puke-green color. In official this was used for group chat
     /// </summary>
     GroupChat = 11,
+
     /// <summary>
-    ///     Text appears in an olive-green color.
-    ///     In official this was used for guild chat
+    ///     Text appears in an olive-green color. In official this was used for guild chat
     /// </summary>
     GuildChat = 12,
+
     /// <summary>
     ///     Closes opened pop-up windows. <see cref="ScrollWindow" />, <see cref="NonScrollWindow" />,
     ///     <see cref="WoodenBoard" />
     /// </summary>
     ClosePopup = 17,
+
     /// <summary>
     ///     Text appears white, and persists indefinitely until cleared in the top right corner
     /// </summary>
@@ -189,18 +200,22 @@ public enum LoginMessageType : byte
     ///     A generic confirmation window with an ok button
     /// </summary>
     Confirm = 0,
+
     /// <summary>
     ///     Clears the name field during character creation and presents a message with an ok button
     /// </summary>
     ClearNameMessage = 3,
+
     /// <summary>
     ///     Clears the password field during character creation and presents a message with an ok button
     /// </summary>
     ClearPswdMessage = 5,
+
     /// <summary>
     ///     Clears the name and password fields on the login screen and presents a message with an ok button
     /// </summary>
     CharacterDoesntExist = 14,
+
     /// <summary>
     ///     Clears the password fields on the login screen and presents a message with an ok button
     /// </summary>
@@ -227,10 +242,12 @@ public enum PublicMessageType : byte
     ///     Normal white chat message
     /// </summary>
     Normal = 0,
+
     /// <summary>
     ///     Yellow shout message
     /// </summary>
     Shout = 1,
+
     /// <summary>
     ///     Blue chant message
     /// </summary>
@@ -238,8 +255,7 @@ public enum PublicMessageType : byte
 }
 
 /// <summary>
-///     Byte codes for the characters used for each color in the pattern '{=a'.
-///     Used by many things.
+///     Byte codes for the characters used for each color in the pattern '{=a'. Used by many things.
 /// </summary>
 public enum MessageColor : byte
 {
@@ -247,82 +263,102 @@ public enum MessageColor : byte
     ///     The default color, keep the existing color
     /// </summary>
     Default = 0,
+
     /// <summary>
     ///     "{=a"
     /// </summary>
     Gray = 97,
+
     /// <summary>
     ///     "{=b"
     /// </summary>
     Red = 98,
+
     /// <summary>
     ///     "{=c" This color does not work in public chat
     /// </summary>
     Yellow = 99,
+
     /// <summary>
     ///     "{=d"
     /// </summary>
     DarkGreen = 100,
+
     /// <summary>
     ///     "{=e" This color does not work in public chat
     /// </summary>
     Silver = 101,
+
     /// <summary>
     ///     "{=f"
     /// </summary>
     Blue = 102,
+
     /// <summary>
     ///     "{=g"
     /// </summary>
     Gainsboro = 103,
+
     /// <summary>
     ///     "{=i"
     /// </summary>
     SpanishGray = 105,
+
     /// <summary>
     ///     "{=j"
     /// </summary>
     Nickel = 106,
+
     /// <summary>
     ///     "{=k"
     /// </summary>
     Slate = 107,
+
     /// <summary>
     ///     "{=l"
     /// </summary>
     Charcoal = 108,
+
     /// <summary>
     ///     "{=m"
     /// </summary>
     DirtyBlack = 109,
+
     /// <summary>
     ///     "{=n"
     /// </summary>
     Black = 110,
+
     /// <summary>
     ///     "{=o"
     /// </summary>
     HotPink = 111,
+
     /// <summary>
     ///     "{=p"
     /// </summary>
     Purple = 112,
+
     /// <summary>
     ///     "{=q"
     /// </summary>
     NeonGreen = 113,
+
     /// <summary>
     ///     "{=s"
     /// </summary>
     Orange = 115,
+
     /// <summary>
     ///     "{=t"
     /// </summary>
     Brown = 116,
+
     /// <summary>
     ///     "{=u"
     /// </summary>
     White = 117,
+
     /// <summary>
     ///     "{=x"
     /// </summary>
@@ -332,8 +368,7 @@ public enum MessageColor : byte
 
 #region Legend
 /// <summary>
-///     A byte representing the icon of a legend mark.
-///     Used by ServerOpCode.Profile and ServerOpCode.SelfProfile
+///     A byte representing the icon of a legend mark. Used by ServerOpCode.Profile and ServerOpCode.SelfProfile
 /// </summary>
 public enum MarkIcon : byte
 {
@@ -348,8 +383,7 @@ public enum MarkIcon : byte
 }
 
 /// <summary>
-///     A byte representing the color of a legend mark.
-///     Used by ServerOpCode.Profile and ServerOpCode.SelfProfile
+///     A byte representing the color of a legend mark. Used by ServerOpCode.Profile and ServerOpCode.SelfProfile
 /// </summary>
 public enum MarkColor : byte
 {
@@ -614,8 +648,7 @@ public enum MarkColor : byte
 
 #region DisplayData
 /// <summary>
-///     A byte representing the color of hair and items.
-///     Used by many things.
+///     A byte representing the color of hair and items. Used by many things.
 /// </summary>
 public enum DisplayColor : byte
 {
@@ -697,8 +730,7 @@ public enum DisplayColor : byte
 }
 
 /// <summary>
-///     A byte representing the style a player's name is shown in.
-///     Used by ServerOpCode.DisplayAisling
+///     A byte representing the style a player's name is shown in. Used by ServerOpCode.DisplayAisling
 /// </summary>
 public enum NameTagStyle : byte
 {
@@ -709,8 +741,7 @@ public enum NameTagStyle : byte
 }
 
 /// <summary>
-///     A byte representing the size of the lantern effect around a player.
-///     Used by ServerOpCode.DisplayAisling
+///     A byte representing the size of the lantern effect around a player. Used by ServerOpCode.DisplayAisling
 /// </summary>
 public enum LanternSize : byte
 {
@@ -720,8 +751,7 @@ public enum LanternSize : byte
 }
 
 /// <summary>
-///     A byte representing the body position a player is in while using a rest cloak.
-///     Used by ServerOpCode.DisplayAisling
+///     A byte representing the body position a player is in while using a rest cloak. Used by ServerOpCode.DisplayAisling
 /// </summary>
 public enum RestPosition : byte
 {
@@ -732,8 +762,7 @@ public enum RestPosition : byte
 }
 
 /// <summary>
-///     A byte representing the color of the player's skin.
-///     Used by ServerOpCode.DisplayAisling
+///     A byte representing the color of the player's skin. Used by ServerOpCode.DisplayAisling
 /// </summary>
 public enum BodyColor : byte
 {
@@ -750,8 +779,7 @@ public enum BodyColor : byte
 }
 
 /// <summary>
-///     A byte representing the sprite used for a player's body.
-///     Used by ServerOpCode.DisplayAisling
+///     A byte representing the sprite used for a player's body. Used by ServerOpCode.DisplayAisling
 /// </summary>
 public enum BodySprite : byte
 {
@@ -770,12 +798,12 @@ public enum BodySprite : byte
 }
 
 /// <summary>
-///     A byte representing the gender of the player.
-///     Used by many things.
+///     A byte representing the gender of the player. Used by many things.
 /// </summary>
 [Flags]
 public enum Gender : byte
 {
+    None = 0,
     Male = 1,
     Female = 2,
     Unisex = Male | Female
@@ -796,8 +824,7 @@ public enum Stat
 }
 
 /// <summary>
-///     A byte representing attack and defense elements on the Shift+G panel.
-///     Used by ServerOpCode.Attributes
+///     A byte representing attack and defense elements on the Shift+G panel. Used by ServerOpCode.Attributes
 /// </summary>
 public enum Element : byte
 {
@@ -814,8 +841,7 @@ public enum Element : byte
 }
 
 /// <summary>
-///     A byte representing which type of mail was received.
-///     Used by ServerOpCode.Attributes
+///     A byte representing which type of mail was received. Used by ServerOpCode.Attributes
 /// </summary>
 public enum MailFlag : byte
 {
@@ -824,8 +850,8 @@ public enum MailFlag : byte
 }
 
 /// <summary>
-///     A byte representing the nation emblem displayed in the player's profile.
-///     Used by ServerOpCode.Profile and ServerOpCode.SelfProfile
+///     A byte representing the nation emblem displayed in the player's profile. Used by ServerOpCode.Profile and
+///     ServerOpCode.SelfProfile
 /// </summary>
 public enum Nation : byte
 {
@@ -853,39 +879,48 @@ public enum Nation : byte
 public enum StatUpdateType : byte
 {
     None = 0,
+
     /// <summary>
     ///     mail
     /// </summary>
     UnreadMail = 1,
     Unknown = 2,
+
     /// <summary>
     ///     Blind, Mail, Elements, Ressists, AC, DMG, HIT
     /// </summary>
     Secondary = 4,
+
     /// <summary>
     ///     Exp, Gold
     /// </summary>
     ExpGold = 8,
+
     /// <summary>
     ///     Current HP, Current MP
     /// </summary>
     Vitality = 16,
+
     /// <summary>
     ///     Level, Max HP/MP, Current stats, Weight, Unspent
     /// </summary>
     Primary = 32,
+
     /// <summary>
     ///    Exp, Gold, Level, Max HP/MP, Current stats, Weight, Unspent
     /// </summary>
     WeightGold = ExpGold | Primary,
+
     /// <summary>
     ///   Level, Max & Current HP/MP, Current stats, Weight, Unspent
     /// </summary>
     FullVitality = Vitality | Primary,
+
     /// <summary>
     ///    All Status Flags - Minus GameMasterA, GameMasterB, and swimming
     /// </summary>
     Full = Primary | Vitality | ExpGold | Secondary,
+
     GameMasterA = 64,
     GameMasterB = 128,
     Swimming = GameMasterA | GameMasterB
@@ -894,8 +929,7 @@ public enum StatUpdateType : byte
 
 #region Profile
 /// <summary>
-///     A byte representing the 'temuair class' of an aisling.
-///     Used in many places.
+///     A byte representing the 'zolian class' of a player; Modified for Zolian
 /// </summary>
 public enum BaseClass : byte
 {
@@ -914,8 +948,7 @@ public enum BaseClass : byte
 }
 
 /// <summary>
-///     A flag representing the 'job class' of an aisling.
-///     Used in many places.
+///     A flag representing the 'job class' of player; Modified for Zolian
 /// </summary>
 [Flags]
 public enum JobClass
@@ -937,8 +970,7 @@ public enum JobClass
 }
 
 /// <summary>
-///     A byte representing the slot of a piece of equipment.
-///     Used in many places.
+///     A byte representing the slot of a piece of equipment. Used in many places.
 /// </summary>
 public enum EquipmentSlot : byte
 {
@@ -988,8 +1020,7 @@ public enum EquipmentType : byte
 
 #region Options
 /// <summary>
-///     A byte representing the social status of the user.
-///     Used by ServerOpCode.Profile, and ServerOpCode.WorldList
+///     A byte representing the social status of the user. Used by ServerOpCode.Profile, and ServerOpCode.WorldList
 /// </summary>
 public enum SocialStatus : byte
 {
@@ -1004,39 +1035,25 @@ public enum SocialStatus : byte
 }
 
 /// <summary>
-///     A byte representing an option on the client.
-///     Used by ClientOpCode.UserOptionToggle and ServerOpCode.ServerMessage
+///     A byte representing an option on the client. Used by ClientOpCode.UserOptionToggle and ServerOpCode.ServerMessage
 /// </summary>
 public enum UserOption
 {
     Request = 0,
-    Setting1 = 1,
-    Setting2 = 2,
-    Setting3 = 3,
-    Setting4 = 4,
-    Setting5 = 5,
-    Setting6 = 6,
-    Setting7 = 7,
-    Setting8 = 8,
-    Setting9 = 9,
-    Setting10 = 10,
-    Setting11 = 11,
-    Setting12 = 12,
-    Setting13 = 13,
-    Setting14 = 14,
-    Setting15 = 15,
-    Setting16 = 16,
-    Setting17 = 17,
-    Setting18 = 18,
-    Setting19 = 19,
-    Setting20 = 20
+    Option1 = 1,
+    Option2 = 2,
+    Option3 = 3,
+    Option4 = 4,
+    Option5 = 5,
+    Option6 = 6,
+    Option7 = 7,
+    Option8 = 8
 }
 #endregion
 
 #region GuI
 /// <summary>
-///     A byte representing the color of a name in the world list.
-///     Used by ServerOpCode.WorldList
+///     A byte representing the color of a name in the world list. Used by ServerOpCode.WorldList
 /// </summary>
 public enum WorldListColor : byte
 {
@@ -1046,8 +1063,8 @@ public enum WorldListColor : byte
 }
 
 /// <summary>
-///     A byte representing the color an effect, for the purposes of showing it's remaining duration.
-///     Used by ServerOpCode.Effect
+///     A byte representing the color an effect, for the purposes of showing it's remaining duration. Used by
+///     ServerOpCode.Effect
 /// </summary>
 public enum EffectColor : byte
 {
@@ -1061,8 +1078,7 @@ public enum EffectColor : byte
 }
 
 /// <summary>
-///     A byte representing the type of a panel.
-///     Used by ClientOpCode.SwapSlot
+///     A byte representing the type of a panel. Used by ClientOpCode.SwapSlot
 /// </summary>
 public enum PanelType : byte
 {
@@ -1073,8 +1089,7 @@ public enum PanelType : byte
 }
 
 /// <summary>
-///     A byte representing the type of a merchant menu.
-///     Used by ServerOpCode.Menu
+///     A byte representing the type of a merchant menu. Used by ServerOpCode.Menu
 /// </summary>
 public enum MenuType : byte
 {
@@ -1091,8 +1106,8 @@ public enum MenuType : byte
 }
 
 /// <summary>
-///     A byte switch used to specify the type of additional args included in a dialog response.
-///     Used by ClientOpCode.DialogResponse
+///     A byte switch used to specify the type of additional args included in a dialog response. Used by
+///     ClientOpCode.DialogResponse
 /// </summary>
 public enum DialogArgsType : byte
 {
@@ -1102,8 +1117,7 @@ public enum DialogArgsType : byte
 }
 
 /// <summary>
-///     A byte switched used to specify the type of dialog.
-///     Used by ServerOpCode.Dialog
+///     A byte switched used to specify the type of dialog. Used by ServerOpCode.Dialog
 /// </summary>
 public enum DialogType : byte
 {
@@ -1117,8 +1131,7 @@ public enum DialogType : byte
 }
 
 /// <summary>
-///     A byte representing which button on a dialog window was pressed.
-///     Used by ClientOpCode.DialogResponse
+///     A byte representing which button on a dialog window was pressed. Used by ClientOpCode.DialogResponse
 /// </summary>
 public enum DialogResult : sbyte
 {
@@ -1128,8 +1141,7 @@ public enum DialogResult : sbyte
 }
 
 /// <summary>
-///     A byte representing the type of board being displayed.
-///     Used by ServerOpCode.BulletinBoard
+///     A byte representing the type of board being displayed. Used by ServerOpCode.BulletinBoard
 /// </summary>
 public enum BoardOrResponseType : byte
 {
@@ -1144,8 +1156,7 @@ public enum BoardOrResponseType : byte
 }
 
 /// <summary>
-///     A byte representing the type of request in association with a board.
-///     Used by ClientOpCode.BoardRequest
+///     A byte representing the type of request in association with a board. Used by ClientOpCode.BoardRequest
 /// </summary>
 public enum BoardRequestType : byte
 {
@@ -1177,8 +1188,7 @@ public enum NotepadType
 
 #region Skill/Spell
 /// <summary>
-///     A byte representing the type of a spell.
-///     Used by ServerOpCode.AddSpellToPane
+///     A byte representing the type of a spell. Used by ServerOpCode.AddSpellToPane
 /// </summary>
 public enum SpellType : byte
 {
@@ -1193,8 +1203,7 @@ public enum SpellType : byte
 }
 
 /// <summary>
-///     A byte representing the emote/body animation being sent.
-///     Used by ServerOpCode.BodyAnimation
+///     A byte representing the emote/body animation being sent. Used by ServerOpCode.BodyAnimation
 /// </summary>
 public enum BodyAnimation : byte
 {
@@ -1257,8 +1266,7 @@ public enum BodyAnimation : byte
 
 #region Game
 /// <summary>
-///     A byte switch used when receiving information about a click.
-///     Used by ClientOpCode.Click
+///     A byte switch used when receiving information about a click. Used by ClientOpCode.Click
 /// </summary>
 public enum ClickType : byte
 {
@@ -1272,26 +1280,32 @@ public enum LevelCircle : byte
     ///     Levels 1-10
     /// </summary>
     One = 1,
+
     /// <summary>
     ///     Levels 11-40
     /// </summary>
     Two = 2,
+
     /// <summary>
     ///     Levels 41-70
     /// </summary>
     Three = 3,
+
     /// <summary>
     ///     Levels 71-98
     /// </summary>
     Four = 4,
+
     /// <summary>
     ///     Levels 99+
     /// </summary>
     Five = 5,
+
     /// <summary>
     ///     Master
     /// </summary>
     Six = 6,
+
     /// <summary>
     ///     Advanced Class
     /// </summary>
@@ -1299,8 +1313,8 @@ public enum LevelCircle : byte
 }
 
 /// <summary>
-///     A byte switch used when receiving information about an action performed on an exchange window.
-///     Used by ClientOpCode.Exchange
+///     A byte switch used when receiving information about an action performed on an exchange window. Used by
+///     ClientOpCode.Exchange
 /// </summary>
 public enum ExchangeRequestType : byte
 {
@@ -1313,8 +1327,7 @@ public enum ExchangeRequestType : byte
 }
 
 /// <summary>
-///     A byte switch used to specify the action performed on an exchange window.
-///     Used by ServerOpCode.Exchange
+///     A byte switch used to specify the action performed on an exchange window. Used by ServerOpCode.Exchange
 /// </summary>
 public enum ExchangeResponseType : byte
 {
@@ -1379,11 +1392,12 @@ public enum MapFlags : ulong
     SnowTileset = 128
 }
 
-public enum ShardingType : byte
+
+[Flags]
+public enum TileFlags : byte
 {
-    None,
-    AbsolutePlayerLimit,
-    PlayerLimit,
-    AbsoluteGroupLimit
+    None = 0,
+    Wall = 15,
+    Unknown = 128
 }
 #endregion
