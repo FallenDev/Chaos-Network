@@ -35,10 +35,10 @@ public sealed class GroupInviteConverter : PacketConverterBase<GroupInviteArgs>
             var maxLevel = reader.ReadByte();
             var maxOfClass = new byte[6];
 
-            maxOfClass[(byte)BaseClass.Warrior] = reader.ReadByte();
-            maxOfClass[(byte)BaseClass.Wizard] = reader.ReadByte();
-            maxOfClass[(byte)BaseClass.Rogue] = reader.ReadByte();
-            maxOfClass[(byte)BaseClass.Priest] = reader.ReadByte();
+            maxOfClass[(byte)BaseClass.Berserker | (byte)BaseClass.Defender] = reader.ReadByte();
+            maxOfClass[(byte)BaseClass.Arcanus] = reader.ReadByte();
+            maxOfClass[(byte)BaseClass.Assassin] = reader.ReadByte();
+            maxOfClass[(byte)BaseClass.Cleric] = reader.ReadByte();
             maxOfClass[(byte)BaseClass.Monk] = reader.ReadByte();
         }
 
