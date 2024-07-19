@@ -5,7 +5,7 @@ Extracted Network layer from Chaos-Server. To use this Network layer in your own
 [Sichi](https://github.com/Sichii) has released an official version of his networking layer here: [https://www.nuget.org/packages/Chaos.Networking](https://www.nuget.org/packages/Chaos.Networking)
 
 ## Tech Stack
-C# .NET 8
+C# .NET 9
 
 ## Authors  
   
