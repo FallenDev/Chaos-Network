@@ -47,16 +47,23 @@ public sealed class Rectangle : IRectangle, IEquatable<IRectangle>
     /// <summary>
     ///     Creates a new <see cref="Rectangle" /> from values indicating the top left corner, width, and height
     /// </summary>
-    /// <param name="left">The X value of the rectangle's leftmost edge</param>
-    /// <param name="top">The Y value of the retangle's topmost edge</param>
-    /// <param name="width">The width of the rectangle</param>
-    /// <param name="height">The height of the rectangle</param>
+    /// <param name="left">
+    ///     The X value of the rectangle's leftmost edge
+    /// </param>
+    /// <param name="top">
+    ///     The Y value of the retangle's topmost edge
+    /// </param>
+    /// <param name="width">
+    ///     The width of the rectangle
+    /// </param>
+    /// <param name="height">
+    ///     The height of the rectangle
+    /// </param>
     public Rectangle(
         int left,
         int top,
         int width,
-        int height
-    )
+        int height)
     {
         Width = width;
         Height = height;
@@ -70,9 +77,15 @@ public sealed class Rectangle : IRectangle, IEquatable<IRectangle>
     /// <summary>
     ///     Creates a new <see cref="Rectangle" /> from the center point, width, and height
     /// </summary>
-    /// <param name="center">The center point of the rectangle</param>
-    /// <param name="width">The width of the rectangle. The width must be an odd number.</param>
-    /// <param name="height">The height of the rectangle. The height must be an odd number.</param>
+    /// <param name="center">
+    ///     The center point of the rectangle
+    /// </param>
+    /// <param name="width">
+    ///     The width of the rectangle. The width must be an odd number.
+    /// </param>
+    /// <param name="height">
+    ///     The height of the rectangle. The height must be an odd number.
+    /// </param>
     public Rectangle(IPoint center, int width, int height)
         : this(
             center.X - (width - 1) / 2,
@@ -89,10 +102,7 @@ public sealed class Rectangle : IRectangle, IEquatable<IRectangle>
         if (ReferenceEquals(this, other))
             return true;
 
-        return (Height == other.Height)
-               && (Left == other.Left)
-               && (Top == other.Top)
-               && (Width == other.Width);
+        return (Height == other.Height) && (Left == other.Left) && (Top == other.Top) && (Width == other.Width);
     }
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
@@ -115,17 +125,18 @@ public sealed class Rectangle : IRectangle, IEquatable<IRectangle>
         return Equals((IRectangle)obj);
     }
 
-    private IReadOnlyList<IPoint> GenerateVertices() => new List<IPoint>
-    {
-        new Point(Left, Top),
-        new Point(Right, Top),
-        new Point(Right, Bottom),
-        new Point(Left, Bottom)
-    };
+    private IReadOnlyList<IPoint> GenerateVertices()
+        => new List<IPoint>
+        {
+            new Point(Left, Top),
+            new Point(Right, Top),
+            new Point(Right, Bottom),
+            new Point(Left, Bottom)
+        };
 
     /// <inheritdoc />
-    public override int GetHashCode() =>
-        HashCode.Combine(
+    public override int GetHashCode()
+        => HashCode.Combine(
             Height,
             Left,
             Top,

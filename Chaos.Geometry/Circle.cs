@@ -9,6 +9,7 @@ public readonly struct Circle : ICircle, IEquatable<ICircle>
 {
     /// <inheritdoc />
     public IPoint Center { get; }
+
     /// <inheritdoc />
     public int Radius { get; }
 
@@ -24,8 +25,12 @@ public readonly struct Circle : ICircle, IEquatable<ICircle>
     /// <summary>
     ///     Creates a new circle
     /// </summary>
-    /// <param name="center">The center point of the circle</param>
-    /// <param name="radius">The radius of the circle</param>
+    /// <param name="center">
+    ///     The center point of the circle
+    /// </param>
+    /// <param name="radius">
+    ///     The radius of the circle
+    /// </param>
     public Circle(IPoint center, int radius)
     {
         Center = center;
@@ -33,9 +38,7 @@ public readonly struct Circle : ICircle, IEquatable<ICircle>
     }
 
     /// <inheritdoc />
-    public bool Equals(ICircle? other) => other is not null
-                                          && Center.Equals(other.Center)
-                                          && (Radius == other.Radius);
+    public bool Equals(ICircle? other) => other is not null && Center.Equals(other.Center) && (Radius == other.Radius);
 
     /// <inheritdoc />
     public override bool Equals(object? obj) => obj is ICircle other && Equals(other);
