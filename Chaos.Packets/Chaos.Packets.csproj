@@ -18,9 +18,11 @@
 		<IsTrimmable>False</IsTrimmable>
 	</PropertyGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\Chaos.Packets.Abstractions\Chaos.Packets.Abstractions.csproj" />
+	  <Compile Remove="Definitions\**" />
+	  <EmbeddedResource Remove="Definitions\**" />
+	  <None Remove="Definitions\**" />
 	</ItemGroup>
 	<ItemGroup>
-		<Folder Include="Definitions\" />
+		<ProjectReference Include="..\Chaos.Packets.Abstractions\Chaos.Packets.Abstractions.csproj" />
 	</ItemGroup>
 </Project>

@@ -1,7 +1,8 @@
-using System.Collections.Concurrent;
+using System.Collections.Frozen;
 using System.Text;
 using Chaos.IO.Memory;
 using Chaos.Packets.Abstractions;
+using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Packets;
 
@@ -10,56 +11,57 @@ namespace Chaos.Packets;
 /// </summary>
 public sealed class PacketSerializer : IPacketSerializer
 {
-    private readonly ConcurrentDictionary<Type, IClientPacketDeserializer> Deserializers;
-    private readonly ConcurrentDictionary<Type, IServerPacketSerializer> Serializers;
+    private readonly FrozenDictionary<Type, IPacketConverter> Converters;
+    private readonly byte SequenceOpCode = (byte)ClientOpCode.SequenceChange;
+
     /// <inheritdoc />
     public Encoding Encoding { get; }
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="PacketSerializer" /> class.
     /// </summary>
-    /// <param name="encoding">The encoding to use when writing and reading strings</param>
-    /// <param name="deserializers">A map of types to deserialize, and how to deserialize them</param>
-    /// <param name="serializers">A map of types to serialize, and how to serialize them</param>
-    public PacketSerializer(
-        Encoding encoding,
-        IDictionary<Type, IClientPacketDeserializer> deserializers,
-        IDictionary<Type, IServerPacketSerializer> serializers
-    )
+    /// <param name="encoding">
+    ///     The encoding to use when writing and reading strings
+    /// </param>
+    /// <param name="converters">
+    ///     A map of types to serialize/deserialize and their associated converters
+    /// </param>
+    public PacketSerializer(Encoding encoding, IDictionary<Type, IPacketConverter> converters)
     {
         Encoding = encoding;
-        Deserializers = new ConcurrentDictionary<Type, IClientPacketDeserializer>(deserializers);
-        Serializers = new ConcurrentDictionary<Type, IServerPacketSerializer>(serializers);
+        Converters = converters.ToFrozenDictionary();
     }
 
     /// <inheritdoc />
-    public T Deserialize<T>(in ClientPacket packet) where T: IReceiveArgs
+    public T Deserialize<T>(in Packet packet) where T: IPacketSerializable
     {
         var type = typeof(T);
-
-        if (!Deserializers.TryGetValue(type, out var deserializer))
-            throw new InvalidOperationException($"No deserializer exists for type \"{type.FullName}\"");
-
         var reader = new SpanReader(Encoding, in packet.Buffer);
-        var typedDeserializer = (IClientPacketDeserializer<T>)deserializer;
 
-        return typedDeserializer.Deserialize(ref reader);
+        if (!Converters.TryGetValue(type, out var converter) || converter is not IPacketConverter<T> typedConverter)
+            throw new InvalidOperationException($"No converter exists for type \"{type.FullName}\"");
+
+        var ret = typedConverter.Deserialize(ref reader);
+
+        if ((typedConverter.OpCode == SequenceOpCode) && ret is ISequencerPacket sequencer)
+            sequencer.Sequence = packet.Sequence;
+
+        return ret;
     }
 
     /// <inheritdoc />
-    public ServerPacket Serialize<T>(T obj) where T: ISendArgs
+    public Packet Serialize(IPacketSerializable obj)
     {
-        if (obj is null)
-            throw new ArgumentNullException(nameof(obj));
+        ArgumentNullException.ThrowIfNull(obj);
 
-        var type = typeof(T);
+        var type = obj.GetType();
 
-        if (!Serializers.TryGetValue(type, out var serializer))
-            throw new InvalidOperationException($"No serializer exists for type \"{type.FullName}\"");
+        if (!Converters.TryGetValue(type, out var converter))
+            throw new InvalidOperationException($"No converter exists for type \"{type.FullName}\"");
 
-        var packet = new ServerPacket(serializer.ServerOpCode);
+        var packet = new Packet(converter.OpCode);
         var writer = new SpanWriter(Encoding);
-        serializer.Serialize(ref writer, obj);
+        converter.Serialize(ref writer, obj);
 
         packet.Buffer = writer.ToSpan();
 
