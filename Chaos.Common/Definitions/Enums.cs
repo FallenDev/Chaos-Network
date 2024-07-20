@@ -1047,7 +1047,12 @@ public enum UserOption
     Option5 = 5,
     Option6 = 6,
     Option7 = 7,
-    Option8 = 8
+    Option8 = 8,
+    Option9 = 9,
+    Option10 = 10,
+    Option11 = 11,
+    Option12 = 12,
+    Option13 = 13
 }
 #endregion
 

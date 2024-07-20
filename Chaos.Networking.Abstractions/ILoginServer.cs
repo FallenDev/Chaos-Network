@@ -50,4 +50,9 @@ public interface ILoginServer<in TClient> : IServer<TClient> where TClient: ICon
     ///     Occurs when a client requests to change a character's password
     /// </summary>
     ValueTask OnPasswordChange(TClient client, in Packet packet);
+
+    /// <summary>
+    ///     Occurs when a client requests an exit on the login screen
+    /// </summary>
+    ValueTask OnExitRequest(TClient client, in Packet packet);
 }
