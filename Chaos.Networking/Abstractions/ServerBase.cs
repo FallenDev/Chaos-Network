@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+
 using Chaos.Common.Synchronization;
 using Chaos.Extensions.Common;
 using Chaos.Networking.Entities.Client;
@@ -9,6 +10,7 @@ using Chaos.NLog.Logging.Extensions;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
 using Chaos.Packets.Abstractions.Definitions;
+
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,7 +23,7 @@ namespace Chaos.Networking.Abstractions;
 /// <typeparam name="T">
 ///     The type of the socket client.
 /// </typeparam>
-public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: IConnectedClient
+public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IConnectedClient
 {
     /// <summary>
     ///     Delegate for handling client packets.
@@ -80,22 +82,11 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
     /// <summary>
     ///     Initializes a new instance of the <see cref="ServerBase{T}" /> class.
     /// </summary>
-    /// <param name="redirectManager">
-    ///     An instance of a redirect manager.
-    /// </param>
-    /// <param name="packetSerializer">
-    ///     An instance of a packet serializer.
-    /// </param>
-    /// <param name="clientRegistry">
-    ///     An instance of a client registry.
-    /// </param>
-    /// <param name="options">
-    ///     Configuration options for the server.
-    /// </param>
-    /// <param name="logger">
-    ///     A logger for the server.
-    /// </param>
-    [SuppressMessage("ReSharper", "VirtualMemberCallInConstructor")]
+    /// <param name="redirectManager">An instance of a redirect manager.</param>
+    /// <param name="packetSerializer">An instance of a packet serializer.</param>
+    /// <param name="clientRegistry">An instance of a client registry.</param>
+    /// <param name="options">Configuration options for the server.</param>
+    /// <param name="logger">A logger for the server.</param>
     protected ServerBase(
         IRedirectManager redirectManager,
         IPacketSerializer packetSerializer,
@@ -110,6 +101,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
         PacketSerializer = packetSerializer;
         ClientHandlers = new ClientHandler?[byte.MaxValue];
         Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        ConfigureTcpSocket(Socket);
         Sync = new FifoAutoReleasingSemaphoreSlim(1, 1, $"{GetType().Name}");
         IndexHandlers();
     }
@@ -122,7 +114,8 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
         try
         {
             Socket.Close();
-        } catch
+        }
+        catch
         {
             //ignored
         }
@@ -140,7 +133,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
         Socket.Listen(100);
 
         Logger.WithTopics(Topics.Actions.Listening)
-              .LogInformation("Listening on {@EndPoint}", endPoint.ToString());
+              .LogInformation("Listening on {@EndPoint}", endPoint.Port.ToString());
 
         Socket.BeginAccept(OnConnection, Socket);
 
@@ -149,25 +142,25 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
         try
         {
             Socket.Shutdown(SocketShutdown.Receive);
-        } catch
+        }
+        catch
         {
             //ignored
         }
 
-        await Parallel.ForEachAsync(
-            ClientRegistry,
-            (client, _) =>
+        await Parallel.ForEachAsync(ClientRegistry, stoppingToken, (client, _) =>
+        {
+            try
             {
-                try
-                {
-                    client.Disconnect();
-                } catch
-                {
-                    //ignored
-                }
+                client.Disconnect();
+            }
+            catch
+            {
+                //ignored
+            }
 
-                return default;
-            });
+            return default;
+        });
 
         Dispose();
     }
@@ -194,20 +187,20 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
         try
         {
             clientSocket = serverSocket.EndAccept(ar);
-        } catch
+        }
+        catch
         {
             //ignored
-        } finally
+        }
+        finally
         {
             serverSocket.BeginAccept(OnConnection, serverSocket);
         }
 
-        if (clientSocket is not null && clientSocket.Connected)
-        {
-            clientSocket.NoDelay = true;
-
-            OnConnected(clientSocket);
-        }
+        if (clientSocket is null || !clientSocket.Connected) return;
+        clientSocket.LingerState = new LingerOption(false, 0);
+        clientSocket.NoDelay = true;
+        OnConnected(clientSocket);
     }
 
     #region Handlers
@@ -226,75 +219,62 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
     public virtual ValueTask HandlePacketAsync(T client, in Packet packet)
     {
         var handler = ClientHandlers[packet.OpCode];
-
-        if (handler is null)
-            return default;
-
-        return handler(client, in packet);
+        return handler?.Invoke(client, in packet) ?? default;
     }
 
     /// <summary>
     ///     Executes an asynchronous action for a client within a sychronized context
     /// </summary>
-    /// <param name="client">
-    ///     The client to execute the action against
-    /// </param>
-    /// <param name="args">
-    ///     The args deserialized from the packet
-    /// </param>
-    /// <param name="action">
-    ///     The action that uses the args
-    /// </param>
-    /// <typeparam name="TArgs">
-    ///     The type of the args that were deserialized
-    /// </typeparam>
+    /// <param name="client">The client to execute the action against</param>
+    /// <param name="args">The args deserialized from the packet</param>
+    /// <param name="action">The action that uses the args</param>
+    /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(1));
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(5));
+
+        if (@lock == null)
+        {
+            Logger.LogInformation($"Contention on {action.Method.Name}");
+            return;
+        }
 
         try
         {
             await action(client, args);
-        } catch (Exception e)
+        }
+        catch (Exception e)
         {
             Logger.WithTopics(Topics.Entities.Packet, Topics.Actions.Processing)
                   .WithProperty(client)
-                  .LogError(
-                      e,
-                      "{@ClientType} failed to execute inner handler with args type {@ArgsType} ({@Args})",
-                      client.GetType()
-                            .Name,
-                      args!.GetType()
-                           .Name,
-                      args);
+                  .LogError(e, "{@ClientType} failed to execute inner handler with args type {@ArgsType} ({@Args})", client.GetType().Name, args!.GetType().Name, args);
         }
     }
 
     /// <summary>
     ///     Executes an asynchronous action for a client within a sychronized context
     /// </summary>
-    /// <param name="client">
-    ///     The client to execute the action against
-    /// </param>
-    /// <param name="action">
-    ///     The action to be executed
-    /// </param>
+    /// <param name="client">The client to execute the action against</param>
+    /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, Func<T, ValueTask> action)
     {
-        await using var @lock = await Sync.WaitAsync();
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(5));
+
+        if (@lock == null)
+        {
+            Logger.LogInformation($"Contention on {action.Method.Name}");
+            return;
+        }
 
         try
         {
             await action(client);
-        } catch (Exception e)
+        }
+        catch (Exception e)
         {
             Logger.WithTopics(Topics.Entities.Packet, Topics.Actions.Processing)
                   .WithProperty(client)
-                  .LogError(
-                      e,
-                      "{@ClientType} failed to execute inner handler",
-                      client.GetType()
-                            .Name);
+                  .LogError(e, "{@ClientType} failed to execute inner handler", client.GetType().Name);
         }
     }
 
@@ -323,11 +303,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
 
         Logger.WithTopics(Topics.Entities.Packet, Topics.Actions.Processing)
               .WithProperty(client)
-              .LogError(
-                  "{@ClientType} encountered an exception: {@Exception}",
-                  client.GetType()
-                        .Name,
-                  args.ExceptionStr);
+              .LogError("{@ClientType} encountered an exception: {@Exception}", client.GetType().Name, args.ExceptionStr);
 
         return default;
     }
@@ -342,4 +318,14 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T: ICo
         return default;
     }
     #endregion
+
+    private static void ConfigureTcpSocket(Socket tcpSocket)
+    {
+        // The socket will not linger
+        // when Socket.Close is called.
+        tcpSocket.LingerState = new LingerOption(false, 0);
+
+        // Disable the Nagle Algorithm for this tcp socket.
+        tcpSocket.NoDelay = true;
+    }
 }
