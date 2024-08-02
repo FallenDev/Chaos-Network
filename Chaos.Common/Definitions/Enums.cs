@@ -881,7 +881,7 @@ public enum StatUpdateType : byte
     None = 0,
 
     /// <summary>
-    ///     mail
+    ///     mail -- Do Not Use, mail is sent as a boolean if true on the server-side then the flag is added in the converter
     /// </summary>
     UnreadMail = 1,
     Unknown = 2,

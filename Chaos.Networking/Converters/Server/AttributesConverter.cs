@@ -22,7 +22,7 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
             StatUpdateType = (StatUpdateType)reader.ReadByte()
         };
 
-        if (attributesArgs.StatUpdateType.HasFlag(StatUpdateType.Primary))
+        if (attributesArgs.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Primary))
         {
             _ = reader.ReadBytes(3); //LI: what is this for?
             attributesArgs.Level = reader.ReadByte();
@@ -41,13 +41,13 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
             reader.ReadBytes(4); //LI: what is this for? 42 00 88 2E
         }
 
-        if (attributesArgs.StatUpdateType.HasFlag(StatUpdateType.Vitality))
+        if (attributesArgs.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Vitality))
         {
             attributesArgs.CurrentHp = reader.ReadUInt32();
             attributesArgs.CurrentMp = reader.ReadUInt32();
         }
 
-        if (attributesArgs.StatUpdateType.HasFlag(StatUpdateType.ExpGold))
+        if (attributesArgs.StatUpdateType.AttributeFlagIsSet(StatUpdateType.ExpGold))
         {
             attributesArgs.TotalExp = reader.ReadUInt32();
             attributesArgs.ToNextLevel = reader.ReadUInt32();
@@ -57,7 +57,7 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
             attributesArgs.Gold = reader.ReadUInt32();
         }
 
-        if (attributesArgs.StatUpdateType.HasFlag(StatUpdateType.Secondary))
+        if (attributesArgs.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Secondary))
         {
             _ = reader.ReadByte(); //LI: what is this for?
             attributesArgs.Blind = reader.ReadByte() == 8;
@@ -91,7 +91,7 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
 
         writer.WriteByte((byte)updateType);
 
-        if (args.StatUpdateType.HasFlag(StatUpdateType.Primary))
+        if (args.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Primary))
         {
             writer.WriteBytes(1, 0, 0); //LI: what is this for?
             writer.WriteByte(args.Level);
@@ -110,13 +110,13 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
             writer.WriteBytes(new byte[4]); //LI: what is this for?  42 00 88 2E
         }
 
-        if (args.StatUpdateType.HasFlag(StatUpdateType.Vitality))
+        if (args.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Vitality))
         {
             writer.WriteUInt32(args.CurrentHp);
             writer.WriteUInt32(args.CurrentMp);
         }
 
-        if (args.StatUpdateType.HasFlag(StatUpdateType.ExpGold))
+        if (args.StatUpdateType.AttributeFlagIsSet(StatUpdateType.ExpGold))
         {
             writer.WriteUInt32(args.TotalExp);
             writer.WriteUInt32(args.ToNextLevel);
@@ -126,7 +126,7 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
             writer.WriteUInt32(args.Gold);
         }
 
-        if (args.StatUpdateType.HasFlag(StatUpdateType.Secondary))
+        if (args.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Secondary))
         {
             writer.WriteByte(0); //LI: what is this for?
             writer.WriteByte((byte)(args.Blind ? 8 : 0));
@@ -141,4 +141,9 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
             writer.WriteByte(args.Hit);
         }
     }
+}
+
+public static class AttributeExtensions
+{
+    public static bool AttributeFlagIsSet(this StatUpdateType self, StatUpdateType flag) => (self & flag) == flag;
 }
