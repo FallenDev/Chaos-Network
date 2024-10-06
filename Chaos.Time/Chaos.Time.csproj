@@ -24,8 +24,9 @@
 		<ProjectReference Include="..\Chaos.Time.Abstractions\Chaos.Time.Abstractions.csproj" />
 	</ItemGroup>
 	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 		<PackageReference Include="JetBrains.Annotations" Version="2024.2.0" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0-rc.1.24431.7" />
 		<PackageReference Include="T-Digest.NET" Version="1.0.3" />
 	</ItemGroup>
 </Project>

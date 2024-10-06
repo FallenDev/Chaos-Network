@@ -21,4 +21,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\Chaos.IO\Chaos.IO.csproj" />
 	</ItemGroup>
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
 </Project>

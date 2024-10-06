@@ -22,4 +22,7 @@
 		<ProjectReference Include="..\Chaos.Extensions.Common\Chaos.Extensions.Common.csproj"/>
 		<ProjectReference Include="..\Chaos.Packets.Abstractions\Chaos.Packets.Abstractions.csproj" />
 	</ItemGroup>
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
 </Project>
