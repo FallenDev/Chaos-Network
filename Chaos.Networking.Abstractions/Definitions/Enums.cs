@@ -1,4 +1,4 @@
-namespace Chaos.Packets.Abstractions.Definitions;
+﻿namespace Chaos.Networking.Abstractions.Definitions;
 
 /// <summary>
 ///     OpCodes used when receiving packets from a client

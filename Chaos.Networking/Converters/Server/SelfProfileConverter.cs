@@ -1,8 +1,8 @@
-using Chaos.Common.Definitions;
+using Chaos.DarkAges.Definitions;
 using Chaos.IO.Memory;
+using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Server;
 using Chaos.Packets.Abstractions;
-using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Networking.Converters.Server;
 
@@ -22,7 +22,7 @@ public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
         var title = reader.ReadString8();
         var groupString = reader.ReadString8();
         var groupOpen = reader.ReadBoolean();
-        _ = reader.ReadBoolean(); //groupbox fml
+        var groupBox = reader.ReadBoolean();
 
         //TODO: read groupbox shit
         var baseClass = reader.ReadByte();

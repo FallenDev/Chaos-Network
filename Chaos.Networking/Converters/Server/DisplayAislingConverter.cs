@@ -1,10 +1,10 @@
-using Chaos.Common.Definitions;
+using Chaos.DarkAges.Definitions;
 using Chaos.Geometry.Abstractions.Definitions;
 using Chaos.IO.Memory;
+using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Definitions;
 using Chaos.Networking.Entities.Server;
 using Chaos.Packets.Abstractions;
-using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Networking.Converters.Server;
 
@@ -100,13 +100,9 @@ public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAisling
             args.FaceSprite = faceSprite;
         }
 
-        var nameTagStyle = reader.ReadByte();
-        var name = reader.ReadString8();
-        var groupBoxText = reader.ReadString8();
-
-        args.NameTagStyle = (NameTagStyle)nameTagStyle;
-        args.Name = name;
-        args.GroupBoxText = groupBoxText;
+        args.NameTagStyle = (NameTagStyle)reader.ReadByte();
+        args.Name = reader.ReadString8();
+        args.GroupBoxText = reader.ReadString8();
 
         if (args is { BodySprite: BodySprite.None, IsTransparent: true })
         {

@@ -19,7 +19,7 @@ public sealed class CounterCollection : IEnumerable<KeyValuePair<string, int>>
     /// </summary>
     public CounterCollection(IEnumerable<KeyValuePair<string, int>>? enumerable = null)
         => Counters = new ConcurrentDictionary<string, int>(
-            enumerable ?? Array.Empty<KeyValuePair<string, int>>(),
+            enumerable ?? [],
             StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />

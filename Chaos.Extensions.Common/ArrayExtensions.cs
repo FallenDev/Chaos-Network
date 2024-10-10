@@ -11,8 +11,8 @@ public static class ArrayExtensions
     public static IEnumerable<T> Flatten<T>(this T[,] map)
     {
         for (var y = 0; y < map.GetLength(0); y++)
-            for (var x = 0; x < map.GetLength(1); x++)
-                yield return map[y, x];
+        for (var x = 0; x < map.GetLength(1); x++)
+            yield return map[y, x];
     }
 
     /// <summary>

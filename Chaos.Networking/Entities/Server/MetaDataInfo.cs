@@ -1,8 +1,9 @@
+using Chaos.Networking.Abstractions.Definitions;
+
 namespace Chaos.Networking.Entities.Server;
 
 /// <summary>
-///     Represents the serialization of the defails of a metadata in the
-///     <see cref="Chaos.Packets.Abstractions.Definitions.ServerOpCode.MetaData" /> packet
+///     Represents the serialization of the defails of a metadata in the <see cref="ServerOpCode.MetaData" /> packet
 /// </summary>
 public sealed record MetaDataInfo
 {
@@ -14,7 +15,7 @@ public sealed record MetaDataInfo
     /// <summary>
     ///     The data of the metadata
     /// </summary>
-    public byte[] Data { get; set; } = Array.Empty<byte>();
+    public byte[] Data { get; set; } = [];
 
     /// <summary>
     ///     The name of the metadata

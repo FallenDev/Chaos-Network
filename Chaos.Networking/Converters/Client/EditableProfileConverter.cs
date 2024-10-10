@@ -1,7 +1,7 @@
 using Chaos.IO.Memory;
+using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
 using Chaos.Packets.Abstractions;
-using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Networking.Converters.Client;
 
@@ -22,7 +22,7 @@ public sealed class EditableProfileConverter : PacketConverterBase<EditableProfi
         if (totalLength == 0)
             return new EditableProfileArgs
             {
-                PortraitData = Array.Empty<byte>(),
+                PortraitData = [],
                 ProfileMessage = string.Empty
             };
 

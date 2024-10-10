@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿﻿using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 using Chaos.Geometry.Abstractions;
 using Chaos.Geometry.Definitions;

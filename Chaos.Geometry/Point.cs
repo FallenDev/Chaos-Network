@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+﻿﻿using System.Text.Json.Serialization;
 using Chaos.Geometry.Abstractions;
 using Chaos.Geometry.Definitions;
 using Chaos.Geometry.JsonConverters;

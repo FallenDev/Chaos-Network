@@ -1,10 +1,10 @@
+using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Entities.Server;
 
 /// <summary>
-///     Represents the serialization of the <see cref="Chaos.Packets.Abstractions.Definitions.ServerOpCode.WorldMap" />
-///     packet
+///     Represents the serialization of the <see cref="ServerOpCode.WorldMap" /> packet
 /// </summary>
 public sealed record WorldMapArgs : IPacketSerializable
 {
@@ -21,5 +21,5 @@ public sealed record WorldMapArgs : IPacketSerializable
     /// <summary>
     ///     A collection of clickable nodes to display on the world map
     /// </summary>
-    public ICollection<WorldMapNodeInfo> Nodes { get; set; } = Array.Empty<WorldMapNodeInfo>();
+    public ICollection<WorldMapNodeInfo> Nodes { get; set; } = [];
 }

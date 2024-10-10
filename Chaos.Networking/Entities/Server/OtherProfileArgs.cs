@@ -1,6 +1,6 @@
-using Chaos.Common.Definitions;
+using Chaos.DarkAges.Definitions;
+using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Packets.Abstractions;
-using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Networking.Entities.Server;
 
@@ -52,7 +52,7 @@ public sealed record OtherProfileArgs : IPacketSerializable
     /// <summary>
     ///     The character's legend marks
     /// </summary>
-    public ICollection<LegendMarkInfo> LegendMarks { get; set; } = Array.Empty<LegendMarkInfo>();
+    public ICollection<LegendMarkInfo> LegendMarks { get; set; } = [];
 
     /// <summary>
     ///     The character's name
@@ -67,7 +67,7 @@ public sealed record OtherProfileArgs : IPacketSerializable
     /// <summary>
     ///     The raw data of the character's portrait
     /// </summary>
-    public byte[] Portrait { get; set; } = Array.Empty<byte>();
+    public byte[] Portrait { get; set; } = [];
 
     /// <summary>
     ///     The character's profile text

@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+﻿﻿using System.Security.Cryptography;
 using System.Text;
 using Chaos.Cryptography.Abstractions;
 using Chaos.Cryptography.Abstractions.Definitions;

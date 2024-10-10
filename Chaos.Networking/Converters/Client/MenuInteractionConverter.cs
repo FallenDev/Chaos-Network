@@ -1,8 +1,8 @@
-using Chaos.Common.Definitions;
+using Chaos.DarkAges.Definitions;
 using Chaos.IO.Memory;
+using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
 using Chaos.Packets.Abstractions;
-using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Networking.Converters.Client;
 
@@ -55,7 +55,7 @@ public sealed class MenuInteractionConverter : PacketConverterBase<MenuInteracti
         if (args.Slot.HasValue)
             writer.WriteByte(args.Slot.Value);
         else
-            foreach (var arg in args.Args?.TakeLast(2) ?? Enumerable.Empty<string>())
+            foreach (var arg in args.Args?.TakeLast(2) ?? [])
                 writer.WriteString8(arg);
     }
 }

@@ -1,8 +1,8 @@
 using System.Text;
 using Chaos.IO.Memory;
+using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
 using Chaos.Packets.Abstractions;
-using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Networking.Converters.Client;
 
@@ -22,7 +22,7 @@ public sealed class ClientExceptionConverter : PacketConverterBase<ClientExcepti
         return new ClientExceptionArgs
         {
             ExceptionStr = Encoding.GetEncoding(949)
-                                   .GetString(data)
+                .GetString(data)
         };
     }
 
@@ -33,5 +33,5 @@ public sealed class ClientExceptionConverter : PacketConverterBase<ClientExcepti
             //LI: need to get the real layout of this packet
             writer.WriteData(
                 Encoding.GetEncoding(949)
-                        .GetBytes(args.ExceptionStr));
+                    .GetBytes(args.ExceptionStr));
 }

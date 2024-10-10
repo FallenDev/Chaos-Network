@@ -43,7 +43,7 @@ public static class TypeExtensions
     public static bool IsFlagEnum(this Type type)
         => type.IsEnum
            && type.GetCustomAttributes(typeof(FlagsAttribute), false)
-                  .Any();
+               .Any();
 
     /// <summary>
     ///     Determines if a type is a primitive type.

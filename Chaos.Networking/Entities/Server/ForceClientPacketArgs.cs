@@ -1,11 +1,10 @@
+using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Packets.Abstractions;
-using Chaos.Packets.Abstractions.Definitions;
 
 namespace Chaos.Networking.Entities.Server;
 
 /// <summary>
-///     Represents the serialization of the
-///     <see cref="Chaos.Packets.Abstractions.Definitions.ServerOpCode.ForceClientPacket" /> packet
+///     Represents the serialization of the <see cref="ServerOpCode.ForceClientPacket" /> packet
 /// </summary>
 public sealed record ForceClientPacketArgs : IPacketSerializable
 {
@@ -17,5 +16,5 @@ public sealed record ForceClientPacketArgs : IPacketSerializable
     /// <summary>
     ///     The data of the packet the server is forcing the client to send back to it
     /// </summary>
-    public byte[] Data { get; set; } = Array.Empty<byte>();
+    public byte[] Data { get; set; } = [];
 }

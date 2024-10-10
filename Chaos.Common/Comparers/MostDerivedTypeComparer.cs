@@ -25,9 +25,6 @@ public sealed class MostDerivedTypeComparer : IComparer<Type>
         if (x.IsAssignableTo(y))
             return -1;
 
-        if (y.IsAssignableTo(x))
-            return 1;
-
-        return 0;
+        return y.IsAssignableTo(x) ? 1 : 0;
     }
 }

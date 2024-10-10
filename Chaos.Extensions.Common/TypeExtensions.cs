@@ -96,11 +96,23 @@ public static class TypeExtensions
     /// <summary>
     ///     Determines whether a type inherits from the specified base type
     /// </summary>
-    private static bool HasBaseType(this Type type, Type baseType)
+    public static bool HasBaseType(this Type type, Type baseType)
     {
-        return baseType.IsGenericTypeDefinition
-            ? type.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == baseType)
-            : type.IsSubclassOf(baseType);
+        var current = type;
+
+        while (current != null)
+        {
+            if (baseType.IsGenericTypeDefinition)
+            {
+                if (current.IsGenericType && (current.GetGenericTypeDefinition() == baseType))
+                    return true;
+            } else if (current == baseType)
+                return true;
+
+            current = current.BaseType;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -115,11 +127,17 @@ public static class TypeExtensions
     ///         false
     ///     </c>
     /// </returns>
-    private static bool HasInterface(this Type type, Type interfaceType)
+    public static bool HasInterface(this Type type, Type interfaceType)
     {
-        return interfaceType.IsGenericTypeDefinition
-            ? type.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == interfaceType)
-            : interfaceType.IsAssignableFrom(type);
+        foreach (var iType in type.GetInterfaces())
+            if (interfaceType.IsGenericTypeDefinition)
+            {
+                if (iType.IsGenericType && (iType.GetGenericTypeDefinition() == interfaceType))
+                    return true;
+            } else if (iType == interfaceType)
+                return true;
+
+        return false;
     }
 
     /// <summary>
@@ -141,27 +159,25 @@ public static class TypeExtensions
     /// </summary>
     public static IEnumerable<Type> LoadImplementations(this Type type)
     {
-        var assemblyTypes = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic)
-            .SelectMany(a =>
-            {
-                try
-                {
-                    return a.GetTypes();
-                }
-                catch
-                {
-                    return [];
-                }
-            })
-            .Where(t => !t.IsInterface && !t.IsAbstract);
+        var assemblyTypes = AppDomain.CurrentDomain
+                                     .GetAssemblies()
+                                     .Where(a => !a.IsDynamic)
+                                     .SelectMany(
+                                         a =>
+                                         {
+                                             try
+                                             {
+                                                 return a.GetTypes();
+                                             } catch
+                                             {
+                                                 return [];
+                                             }
+                                         })
+                                     .Where(asmType => asmType is { IsInterface: false, IsAbstract: false });
 
         if (type.IsGenericTypeDefinition)
-        {
-            return assemblyTypes.Where(t =>
-                type.IsInterface ? t.HasInterface(type) : t.HasBaseType(type));
-        }
+            return assemblyTypes.Where(asmType => type.IsInterface ? asmType.HasInterface(type) : asmType.HasBaseType(type));
 
-        return assemblyTypes.Where(type.IsAssignableFrom);
+        return assemblyTypes.Where(asmType => asmType.IsAssignableTo(type));
     }
 }
