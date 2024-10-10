@@ -20,7 +20,7 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0-rc.1.24431.7" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0-rc.2.24473.5" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\Chaos.Extensions.Common\Chaos.Extensions.Common.csproj" />
