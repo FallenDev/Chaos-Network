@@ -11,6 +11,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chaos.Cryptography", "Chaos
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chaos.Cryptography.Abstractions", "Chaos.Cryptography.Abstractions\Chaos.Cryptography.Abstractions.csproj", "{A6B22A3B-3950-4E0A-802A-3921DC9BCF83}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chaos.DarkAges", "Chaos.DarkAges\Chaos.DarkAges.csproj", "{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chaos.Extensions.Common", "Chaos.Extensions.Common\Chaos.Extensions.Common.csproj", "{DCE8A8F1-6178-4BB4-A485-66028CAD4E28}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chaos.Geometry", "Chaos.Geometry\Chaos.Geometry.csproj", "{347FC8B8-59A5-4BBC-82AD-E0253E89CFC8}"
@@ -32,8 +34,6 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chaos.Time", "Chaos.Time\Chaos.Time.csproj", "{228EB1F1-29BB-48A9-B163-018855E06EA6}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chaos.Time.Abstractions", "Chaos.Time.Abstractions\Chaos.Time.Abstractions.csproj", "{7F0521EE-762F-491F-90E3-318CE8CFAB81}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chaos.DarkAges", "Chaos.DarkAges\Chaos.DarkAges.csproj", "{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -57,6 +57,10 @@ Global
 		{A6B22A3B-3950-4E0A-802A-3921DC9BCF83}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A6B22A3B-3950-4E0A-802A-3921DC9BCF83}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6B22A3B-3950-4E0A-802A-3921DC9BCF83}.Release|Any CPU.Build.0 = Release|Any CPU
+		{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{DCE8A8F1-6178-4BB4-A485-66028CAD4E28}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{DCE8A8F1-6178-4BB4-A485-66028CAD4E28}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DCE8A8F1-6178-4BB4-A485-66028CAD4E28}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -101,10 +105,6 @@ Global
 		{7F0521EE-762F-491F-90E3-318CE8CFAB81}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7F0521EE-762F-491F-90E3-318CE8CFAB81}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7F0521EE-762F-491F-90E3-318CE8CFAB81}.Release|Any CPU.Build.0 = Release|Any CPU
-		{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{244A8BC5-5D3D-4FE7-A784-9108DCC1B15A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
