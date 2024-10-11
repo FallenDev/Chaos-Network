@@ -20,7 +20,6 @@
 		<IsTrimmable>False</IsTrimmable>
 	</PropertyGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\Chaos.Darkages\Chaos.Darkages.csproj" />
 		<ProjectReference Include="..\Chaos.Cryptography\Chaos.Cryptography.csproj" />
 		<ProjectReference Include="..\Chaos.Extensions.Common\Chaos.Extensions.Common.csproj" />
 		<ProjectReference Include="..\Chaos.Geometry\Chaos.Geometry.csproj" />
