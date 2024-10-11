@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: Clear cache
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
           script: |
             console.log("About to clear")
@@ -35,11 +35,12 @@ jobs:
             }
             console.log("Clear completed")
     - name: 🛠️ Check-out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: 🛠️ Setup .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.x
+        dotnet-version: '9.0.x'
+        dotnet-quality: 'preview'
     - name: 🛠️ Enable Problem Matchers
       run: echo "::add-matcher::.github/matchers/dotnet.json"
     - name: 🛠️ Restore & Load Dependencies
