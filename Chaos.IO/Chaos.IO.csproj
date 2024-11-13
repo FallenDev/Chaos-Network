@@ -21,7 +21,4 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="Chaos.IO.Tests" />
 	</ItemGroup>
-	<ItemGroup>
-		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-	</ItemGroup>
 </Project>

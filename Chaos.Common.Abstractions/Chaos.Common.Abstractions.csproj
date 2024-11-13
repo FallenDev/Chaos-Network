@@ -18,7 +18,4 @@
 		<DebugType>embedded</DebugType>
 		<IsTrimmable>False</IsTrimmable>
 	</PropertyGroup>
-	<ItemGroup>
-		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-	</ItemGroup>
 </Project>

@@ -23,9 +23,6 @@
 		<ProjectReference Include="..\Chaos.Packets.Abstractions\Chaos.Packets.Abstractions.csproj" />
 	</ItemGroup>
 	<ItemGroup>
-		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-	</ItemGroup>
-	<ItemGroup>
 	  <PackageReference Include="JetBrains.Annotations" Version="2024.3.0" />
 	  <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
 	  <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
