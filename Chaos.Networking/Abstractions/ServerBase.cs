@@ -196,8 +196,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         }
 
         if (clientSocket is null || !clientSocket.Connected) return;
-        clientSocket.LingerState = new LingerOption(false, 0);
-        clientSocket.NoDelay = true;
+        ConfigureTcpSocket(clientSocket);
         OnConnected(clientSocket);
     }
 
@@ -229,7 +228,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(5));
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(200));
 
         if (@lock == null)
         {
@@ -256,7 +255,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, Func<T, ValueTask> action)
     {
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromSeconds(5));
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(200));
 
         if (@lock == null)
         {
@@ -319,11 +318,24 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
 
     private static void ConfigureTcpSocket(Socket tcpSocket)
     {
-        // The socket will not linger
-        // when Socket.Close is called.
+        // The socket will not linger when Socket.Close is called
         tcpSocket.LingerState = new LingerOption(false, 0);
 
-        // Disable the Nagle Algorithm for this tcp socket.
+        // Disable the Nagle Algorithm for low-latency communication
         tcpSocket.NoDelay = true;
+
+        // Allows server to process multiple clients concurrently without blocking until data is read/written
+        tcpSocket.Blocking = false;
+
+        // Smaller buffer size (8 KB) to ensure latency remains low, especially for legacy clients
+        tcpSocket.ReceiveBufferSize = 16384;
+        tcpSocket.SendBufferSize = 16384;
+
+        // Short timeouts to avoid latency buildup
+        tcpSocket.ReceiveTimeout = 1000;
+        tcpSocket.SendTimeout = 1000;
+
+        // Enable TCP keep-alive to detect stale connections
+        tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
     }
 }
