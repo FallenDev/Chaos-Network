@@ -150,6 +150,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     /// <inheritdoc />
     public virtual async void BeginReceive()
     {
+        if (!Socket.Connected) return;
         Connected = true;
         await Task.Yield();
 
@@ -263,8 +264,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     /// <inheritdoc />
     public virtual void Send(ref Packet packet)
     {
-        if (!Connected)
-            return;
+        if (!Connected || !Socket.Connected) return;
 
         //no way to pass the packet in because its a ref struct
         //but we still want to avoid serializing the packet to a string if we aren't actually going to log it

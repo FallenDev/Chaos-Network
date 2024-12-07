@@ -227,7 +227,7 @@ public ref struct SpanWriter
     /// <param name="buffer">
     ///     The byte array to write.
     /// </param>
-    public void WriteBytes(params byte[] buffer)
+    public void WriteBytes(params ReadOnlySpan<byte> buffer)
     {
         GrowIfNeeded(buffer.Length);
 

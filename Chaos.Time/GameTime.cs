@@ -74,9 +74,9 @@ public readonly struct GameTime : IComparable, IComparable<GameTime>, IEquatable
     ///     Starting date of the server.
     /// </summary>
     private static DateTime Origin { get; } = new(
-        2022,
-        11,
-        1,
+        2020,
+        10,
+        22,
         0,
         0,
         0,

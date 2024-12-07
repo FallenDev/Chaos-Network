@@ -711,7 +711,7 @@ public enum DisplayColor : byte
     Fern,
     GhostPink,
     Flamingo,
-    Turqoise,
+    Turquoise,
     MatteBlack,
     Taffy,
     NeonPurple
@@ -871,27 +871,27 @@ public enum StatUpdateType : byte
     ///     mail -- Do Not Use, mail is sent as a boolean if true on the server-side then the flag is added in the converter
     /// </summary>
     UnreadMail = 1,
-    Unknown = 2,
+    Unknown = 1 << 1,
 
     /// <summary>
     ///     Blind, Mail, Elements, Ressists, AC, DMG, HIT
     /// </summary>
-    Secondary = 4,
+    Secondary = 1 << 2,
 
     /// <summary>
     ///     Exp, Gold
     /// </summary>
-    ExpGold = 8,
+    ExpGold = 1 << 3,
 
     /// <summary>
     ///     Current HP, Current MP
     /// </summary>
-    Vitality = 16,
+    Vitality = 1 << 4,
 
     /// <summary>
     ///     Level, Max HP/MP, Current stats, Weight, Unspent
     /// </summary>
-    Primary = 32,
+    Primary = 1 << 5,
 
     /// <summary>
     ///    Exp, Gold, Level, Max HP/MP, Current stats, Weight, Unspent
@@ -908,8 +908,8 @@ public enum StatUpdateType : byte
     /// </summary>
     Full = Primary | Vitality | ExpGold | Secondary,
 
-    GameMasterA = 64,
-    GameMasterB = 128,
+    GameMasterA = 1 << 6,
+    GameMasterB = 1 << 7,
     Swimming = GameMasterA | GameMasterB
 }
 #endregion

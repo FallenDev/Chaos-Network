@@ -1,7 +1,6 @@
 using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using System.Text.RegularExpressions;
 using Chaos.Common.Converters;
 using Chaos.Common.Definitions;
 
@@ -52,16 +51,16 @@ public sealed class ArgumentCollection : IEnumerable<string>
     public ArgumentCollection(string argumentStr)
     {
         Arguments = [];
+        var argumentSpan = argumentStr.AsSpan();
 
-        foreach (var match in RegexCache.COMMAND_SPLIT_REGEX
-                                        .Matches(argumentStr)
-                                        .OfType<Match>())
+        foreach (var match in RegexCache.CommandSplitRegex.EnumerateMatches(argumentStr))
         {
-            if (!match.Success)
+            var matchedSpan = argumentSpan.Slice(match.Index, match.Length);
+
+            if (matchedSpan.IsEmpty)
                 continue;
 
-            var grp = match.Groups[1].Value;
-            Arguments.Add(!string.IsNullOrEmpty(grp) ? grp : match.Groups[2].Value);
+            Arguments.Add(new string(matchedSpan));
         }
     }
 
@@ -119,13 +118,7 @@ public sealed class ArgumentCollection : IEnumerable<string>
     ///     The delimiter used to split the strings into arguments
     /// </param>
     [ExcludeFromCodeCoverage(Justification = "Nothing to test, just a shorthand")]
-    public void Add(string argument, string? delimiter)
-        => Add(
-            new[]
-            {
-                argument
-            },
-            delimiter);
+    public void Add(string argument, string? delimiter) => Add([argument], delimiter);
 
     /// <summary>
     ///     Adds a string or argument to the end of the collection. The string will be parsed for arguments using the " " as a
@@ -136,15 +129,16 @@ public sealed class ArgumentCollection : IEnumerable<string>
     /// </param>
     public void Add(string argument)
     {
-        foreach (var match in RegexCache.COMMAND_SPLIT_REGEX
-                                        .Matches(argument)
-                                        .OfType<Match>())
+        var argumentSpan = argument.AsSpan();
+
+        foreach (var match in RegexCache.CommandSplitRegex.EnumerateMatches(argument))
         {
-            if (!match.Success)
+            var matchedSpan = argumentSpan.Slice(match.Index, match.Length);
+
+            if (matchedSpan.IsEmpty)
                 continue;
 
-            var grp = match.Groups[1].Value;
-            Arguments.Add(!string.IsNullOrEmpty(grp) ? grp : match.Groups[2].Value);
+            Arguments.Add(new string(matchedSpan));
         }
     }
 

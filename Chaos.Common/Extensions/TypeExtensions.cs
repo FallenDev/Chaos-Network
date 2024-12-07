@@ -1,5 +1,3 @@
-// ReSharper disable once CheckNamespace
-
 using System.Diagnostics.CodeAnalysis;
 
 // ReSharper disable once CheckNamespace
@@ -42,8 +40,9 @@ public static class TypeExtensions
     /// </returns>
     public static bool IsFlagEnum(this Type type)
         => type.IsEnum
-           && type.GetCustomAttributes(typeof(FlagsAttribute), false)
-               .Any();
+           && (type.GetCustomAttributes(typeof(FlagsAttribute), false)
+                   .Length
+               != 0);
 
     /// <summary>
     ///     Determines if a type is a primitive type.
