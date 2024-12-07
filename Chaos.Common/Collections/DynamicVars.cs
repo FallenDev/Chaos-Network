@@ -106,4 +106,9 @@ public sealed class DynamicVars : IEnumerable<KeyValuePair<string, JsonElement>>
 
         return value.Deserialize(type, jsonOptions);
     }
+
+    /// <summary>
+    ///     Sets the value associated with the specified key.
+    /// </summary>
+    public void Set(string key, object value) => Vars[key] = JsonSerializer.SerializeToElement(value);
 }

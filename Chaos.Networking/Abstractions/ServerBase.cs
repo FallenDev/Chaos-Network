@@ -228,7 +228,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(200));
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
         if (@lock == null)
         {
@@ -255,7 +255,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, Func<T, ValueTask> action)
     {
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(200));
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
         if (@lock == null)
         {
