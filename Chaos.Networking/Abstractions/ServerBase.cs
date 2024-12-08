@@ -100,7 +100,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         ClientHandlers = new ClientHandler?[byte.MaxValue];
         Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         ConfigureTcpSocket(Socket);
-        Sync = new FifoAutoReleasingSemaphoreSlim(1, 1, $"{GetType().Name}");
+        Sync = new FifoAutoReleasingSemaphoreSlim(1, 15, $"{GetType().Name}");
         IndexHandlers();
     }
 
