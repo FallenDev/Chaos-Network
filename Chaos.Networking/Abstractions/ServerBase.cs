@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+
 using Chaos.Common.Synchronization;
 using Chaos.Extensions.Common;
 using Chaos.Networking.Abstractions.Definitions;
@@ -9,6 +10,7 @@ using Chaos.NLog.Logging.Definitions;
 using Chaos.NLog.Logging.Extensions;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
+
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -220,7 +222,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     }
 
     /// <summary>
-    ///     Executes an asynchronous action for a client within a sychronized context
+    /// Executes an asynchronous action for a client within a synchronized context.
     /// </summary>
     /// <param name="client">The client to execute the action against</param>
     /// <param name="args">The args deserialized from the packet</param>
@@ -228,19 +230,57 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        if (args.GetType().Name == "ClientWalkArgs")
+        // List of real-time args
+        var validArgsTypes = new HashSet<string>
         {
-            Logger.LogInformation("ClientWalkArgs");
-        }
+            "MapDataArgs",
+            "ClientWalkArgs",
+            "PickupArgs",
+            "ItemDropArgs",
+            "ExitRequestArgs",
+            "ClientRedirectedArgs",
+            "TurnArgs",
+            "ItemUseArgs",
+            "GoldDropArgs",
+            "ItemDroppedOnCreatureArgs",
+            "GoldDroppedOnCreatureArgs",
+            "SwapSlotArgs",
+            "UnequipArgs",
+            "HeartBeatArgs",
+            "RaiseStatArgs",
+            "ExchangeInteractionArgs",
+            "MetaDataRequestArgs"
+        };
 
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
-
-        if (@lock == null)
+        // Check if the args can execute in real-time
+        if (validArgsTypes.Contains(args.GetType().Name))
         {
-            Logger.LogInformation($"Contention on {action.Method.Name}");
-            return;
+            await TryExecuteActionWithArgs(client, args, action);
         }
+        else
+        {
+            // Wait for lock if packets are lower priority
+            await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
+            // If no lock could be acquired, log the information and return
+            if (@lock == null)
+            {
+                Logger.LogInformation($"Contention on {action.Method.Name}");
+                return;
+            }
+
+            await TryExecuteActionWithArgs(client, args, action);
+        }
+    }
+
+    /// <summary>
+    ///     Attempts to execute the action and logs any exceptions that occur.
+    /// </summary>
+    /// <param name="client">The client to execute the action against</param>
+    /// <param name="args">The args deserialized from the packet</param>
+    /// <param name="action">The action that uses the args</param>
+    private async Task TryExecuteActionWithArgs<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
+    {
         try
         {
             await action(client, args);
@@ -249,7 +289,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         {
             Logger.WithTopics(Topics.Entities.Packet, Topics.Actions.Processing)
                   .WithProperty(client)
-                  .LogError(e, "{@ClientType} failed to execute inner handler with args type {@ArgsType} ({@Args})", client.GetType().Name, args!.GetType().Name, args);
+                  .LogError(e, "{@ClientType} failed to execute inner handler with args type {@ArgsType} ({@Args})", client.GetType().Name, args.GetType().Name, args);
         }
     }
 
