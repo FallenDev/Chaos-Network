@@ -228,8 +228,12 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
+        if (args.GetType().Name == "ClientWalkArgs")
+        {
+            Logger.LogInformation("ClientWalkArgs");
+        }
+
         await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
-        Logger.LogInformation($"Execute with args from serverbase");
 
         if (@lock == null)
         {
@@ -257,7 +261,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     public virtual async ValueTask ExecuteHandler(T client, Func<T, ValueTask> action)
     {
         await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
-        Logger.LogInformation($"Execute from serverbase");
 
         if (@lock == null)
         {
