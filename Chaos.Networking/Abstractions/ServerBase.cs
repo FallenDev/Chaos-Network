@@ -208,7 +208,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// </summary>
     protected virtual void IndexHandlers()
     {
-        ClientHandlers[(byte)ClientOpCode.ClientException] = OnClientException;
         ClientHandlers[(byte)ClientOpCode.HeartBeat] = OnHeartBeatAsync;
         ClientHandlers[(byte)ClientOpCode.SequenceChange] = OnSequenceChangeAsync;
         ClientHandlers[(byte)ClientOpCode.SynchronizeTicks] = OnSynchronizeTicksAsync;
@@ -334,18 +333,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     public ValueTask OnSequenceChangeAsync(T client, in Packet packet)
     {
         client.SetSequence(packet.Sequence);
-
-        return default;
-    }
-
-    /// <inheritdoc />
-    public virtual ValueTask OnClientException(T client, in Packet packet)
-    {
-        var args = PacketSerializer.Deserialize<ClientExceptionArgs>(in packet);
-
-        Logger.WithTopics(Topics.Entities.Packet, Topics.Actions.Processing)
-              .WithProperty(client)
-              .LogError("{@ClientType} encountered an exception: {@Exception}", client.GetType().Name, args.ExceptionStr);
 
         return default;
     }
