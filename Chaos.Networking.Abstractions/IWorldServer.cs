@@ -25,6 +25,11 @@ public interface IWorldServer<in TClient> : IServer<TClient> where TClient: ICon
     ValueTask OnChant(TClient client, in Packet packet);
 
     /// <summary>
+    ///     A client is notifying the server that it encountered an exception from a bad packet
+    /// </summary>
+    ValueTask OnClientException(TClient client, in Packet packet);
+
+    /// <summary>
     ///     Occurs when a client clicks on an object
     /// </summary>
     ValueTask OnClick(TClient client, in Packet packet);

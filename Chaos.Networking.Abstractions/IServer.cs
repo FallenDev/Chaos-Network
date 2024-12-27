@@ -14,11 +14,6 @@ public interface IServer<in TClient> : IHostedService where TClient: IConnectedC
     ValueTask HandlePacketAsync(TClient client, in Packet packet);
 
     /// <summary>
-    ///     A client is notifying the server that it encountered an exception from a bad packet
-    /// </summary>
-    ValueTask OnClientException(TClient client, in Packet packet);
-
-    /// <summary>
     ///     A client has sent a heartbeat(keep-alive) ping
     /// </summary>
     ValueTask OnHeartBeatAsync(TClient client, in Packet packet);
