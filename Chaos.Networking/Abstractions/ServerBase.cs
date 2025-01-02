@@ -80,6 +80,21 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     protected FifoAutoReleasingSemaphoreSlim Sync { get; }
 
     /// <summary>
+    ///     The concurrent dictionary to track connection attempts.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, (int Count, DateTime LastConnection)> ConnectionAttempts = [];
+
+    /// <summary>
+    ///     The maximum number of connections allowed per minute.
+    /// </summary>
+    private const int MaxConnectionsPerMinute = 5;
+
+    /// <summary>
+    ///     The window of time to track connection attempts.
+    /// </summary>
+    private readonly TimeSpan ConnectionWindow = TimeSpan.FromMinutes(1);
+
+    /// <summary>
     ///     Initializes a new instance of the <see cref="ServerBase{T}" /> class.
     /// </summary>
     /// <param name="redirectManager">An instance of a redirect manager.</param>
@@ -182,7 +197,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     protected virtual void OnConnection(IAsyncResult ar)
     {
         var serverSocket = (Socket)ar.AsyncState!;
-        Socket? clientSocket = null;
+        Socket clientSocket = null;
 
         try
         {
@@ -190,7 +205,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         }
         catch
         {
-            //ignored
+            // ignored
         }
         finally
         {
@@ -198,11 +213,50 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         }
 
         if (clientSocket is null || !clientSocket.Connected) return;
-        ConfigureTcpSocket(clientSocket);
-        OnConnected(clientSocket);
+        var ipAddress = ((IPEndPoint)clientSocket.RemoteEndPoint!).Address.ToString();
+
+        // Check if the connection from this IP exceeds the rate limit
+        if (IsConnectionAllowed(ipAddress))
+        {
+            // Connection is allowed, configure the socket and handle the connection
+            ConfigureTcpSocket(clientSocket);
+            OnConnected(clientSocket);
+        }
+        else
+        {
+            // If the connection is not allowed, we reject the connection by closing the socket immediately
+            clientSocket.Close();
+        }
+    }
+
+    /// <summary>
+    ///     Checks if the IP address is allowed to make a connection based on rate-limiting rules.
+    /// </summary>
+    /// <param name="ipAddress">The IP address of the connecting client</param>
+    /// <returns>True if the connection is allowed, otherwise false</returns>
+    private bool IsConnectionAllowed(string ipAddress)
+    {
+        var now = DateTime.UtcNow;
+        var connectionData = ConnectionAttempts.GetOrAdd(ipAddress, _ => (0, now));
+
+        // If the last connection is older than the window, reset the count
+        if ((now - connectionData.LastConnection) > ConnectionWindow)
+        {
+            // Reset the count and update the timestamp
+            ConnectionAttempts[ipAddress] = (1, now);
+            return true;
+        }
+
+        // If the connection count exceeds the maximum allowed, reject the connection
+        if (connectionData.Count >= MaxConnectionsPerMinute) return false;        
+
+        // Otherwise, increment the count and allow the connection
+        ConnectionAttempts[ipAddress] = (connectionData.Count + 1, connectionData.LastConnection);
+        return true;
     }
 
     #region Handlers
+
     /// <summary>
     ///     Initializes the client handlers for the server.
     /// </summary>
@@ -346,6 +400,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
 
         return default;
     }
+
     #endregion
 
     private static void ConfigureTcpSocket(Socket tcpSocket)
