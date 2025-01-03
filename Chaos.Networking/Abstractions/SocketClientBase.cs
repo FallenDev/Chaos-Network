@@ -329,6 +329,9 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         //will close/dispose the socket
         Dispose();
     }
+
+    public virtual void Close() => Socket.Close();
+
     #endregion
 
     #region Utility

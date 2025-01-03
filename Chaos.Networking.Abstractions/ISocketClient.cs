@@ -54,6 +54,11 @@ public interface ISocketClient
     void Disconnect();
 
     /// <summary>
+    ///     Immediately releases resources held by the Socket and closes it
+    /// </summary>
+    void Close();
+
+    /// <summary>
     ///     An event that is called when a client disconnects
     /// </summary>
     event EventHandler? OnDisconnected;
