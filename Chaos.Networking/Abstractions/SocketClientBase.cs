@@ -122,7 +122,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
         try
         {
-            Socket.Dispose();
+            Socket.Close();
         } catch
         {
             //ignored
