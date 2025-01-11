@@ -1,6 +1,9 @@
 using System.Buffers;
+using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Chaos.Common.Identity;
 using Chaos.Common.Synchronization;
@@ -14,10 +17,12 @@ using Microsoft.Extensions.Logging;
 namespace Chaos.Networking.Abstractions;
 
 /// <summary>
-///     Provides the ability to send and receive packets over a socket
+///     Provides the ability to send and receive packets over a socket.
 /// </summary>
 public abstract class SocketClientBase : ISocketClient, IDisposable
 {
+    private readonly SslStream _sslStream;
+
     private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
     private int Count;
     private int Sequence;
@@ -26,7 +31,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     public bool Connected { get; set; }
 
     /// <summary>
-    ///     Whether or not to log raw packet data to Trace
+    ///     Whether or not to log raw packet data to Trace.
     /// </summary>
     public bool LogRawPackets { get; set; }
 
@@ -34,7 +39,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     public uint Id { get; }
 
     /// <summary>
-    ///     The logger for logging client-related events
+    ///     The logger for logging client-related events.
     /// </summary>
     protected ILogger<SocketClientBase> Logger { get; }
 
@@ -43,7 +48,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     private IMemoryOwner<byte> MemoryOwner { get; }
 
     /// <summary>
-    ///     The packet serializer for serializing and deserializing packets
+    ///     The packet serializer for serializing and deserializing packets.
     /// </summary>
     protected IPacketSerializer PacketSerializer { get; }
 
@@ -64,15 +69,24 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     ///     Initializes a new instance of the <see cref="SocketClientBase" /> class.
     /// </summary>
     /// <param name="socket"></param>
+    /// <param name="serverCertificate"></param>
     /// <param name="packetSerializer"></param>
     /// <param name="logger"></param>
     protected SocketClientBase(
         Socket socket,
+        X509Certificate serverCertificate, // Add server certificate parameter
         IPacketSerializer packetSerializer,
         ILogger<SocketClientBase> logger)
     {
         Id = SequentialIdGenerator<uint>.Shared.NextId;
         Socket = socket;
+
+        // Wrap the socket in an SslStream
+        _sslStream = new SslStream(new NetworkStream(socket), false);
+
+        // Authenticate as client (or server depending on the use case)
+        _sslStream.AuthenticateAsClient("ServerName"); // Replace with actual server name if needed.
+
         MemoryOwner = MemoryPool<byte>.Shared.Rent(ushort.MaxValue * 4);
         MemoryHandle = Memory.Pin();
         Logger = logger;
@@ -89,12 +103,14 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     /// <inheritdoc />
     public virtual void Dispose()
     {
+        _sslStream.Dispose();
         GC.SuppressFinalize(this);
 
         try
         {
             MemoryHandle.Dispose();
-        } catch
+        }
+        catch
         {
             //ignored
         }
@@ -102,7 +118,8 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         try
         {
             MemoryOwner.Dispose();
-        } catch
+        }
+        catch
         {
             //ignored
         }
@@ -110,7 +127,8 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         try
         {
             Socket.Close();
-        } catch
+        }
+        catch
         {
             //ignored
         }
@@ -125,7 +143,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     #endregion
 
     /// <summary>
-    ///     Asynchronously handles a span buffer as a packet
+    ///     Asynchronously handles a span buffer as a packet.
     /// </summary>
     /// <param name="span"></param>
     /// <returns></returns>
@@ -178,7 +196,8 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                 {
                     await HandlePacketAsync(Buffer.Slice(offset, packetLength))
                         .ConfigureAwait(false);
-                } catch (Exception ex)
+                }
+                catch (Exception ex)
                 {
                     void InnerCatch()
                     {
@@ -216,10 +235,12 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
             e.SetBuffer(Memory[Count..]);
             Socket.ReceiveAndForget(e, ReceiveEventHandler);
-        } catch (Exception)
+        }
+        catch (Exception)
         {
             Disconnect();
-        } finally
+        }
+        finally
         {
             if (Connected)
                 ReceiveSync.Release();
@@ -236,19 +257,10 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     /// <inheritdoc />
     public virtual void Send(ref Packet packet)
     {
-        if (!Connected || !Socket.Connected) return;
+        if (!Connected) return;
 
-        if (LogRawPackets)
-            Logger.WithTopics(
-                      Topics.Qualifiers.Raw,
-                      Topics.Entities.Client,
-                      Topics.Entities.Packet,
-                      Topics.Actions.Send)
-                  .WithProperty(this)
-                  .LogTrace("[Snd] {Packet}", packet.ToString());
-
-        var args = DequeueArgs(packet.ToMemory());
-        Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
+        var data = packet.ToMemory().ToArray();
+        _sslStream.Write(data, 0, data.Length);
     }
 
     /// <inheritdoc />
@@ -262,7 +274,8 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         try
         {
             Socket.Shutdown(SocketShutdown.Receive);
-        } catch
+        }
+        catch
         {
             //ignored
         }
@@ -270,7 +283,8 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         try
         {
             OnDisconnected?.Invoke(this, EventArgs.Empty);
-        } catch
+        }
+        catch
         {
             //ignored
         }

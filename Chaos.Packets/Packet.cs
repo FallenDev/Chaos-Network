@@ -13,12 +13,7 @@ public ref struct Packet
     public Span<byte> Buffer;
 
     /// <summary>
-    ///     Whether or not the packet is encrypted
-    /// </summary>
-    public bool IsEncrypted { get; set; }
-
-    /// <summary>
-    ///     A value used to identify the type of packet and it's purpose
+    ///     A value used to identify the type of packet and its purpose
     /// </summary>
     public byte OpCode { get; }
 
@@ -33,28 +28,18 @@ public ref struct Packet
     public byte Signature { get; }
 
     /// <summary>
-    ///     Initializes a new instance of the <see cref="Packet" /> struct with the specified buffer and encryption status.
+    ///     Initializes a new instance of the <see cref="Packet" /> struct with the specified buffer.
     /// </summary>
     /// <param name="span">
     ///     The buffer containing the packet data.
     /// </param>
-    /// <param name="isEncrypted">
-    ///     <c>
-    ///         true
-    ///     </c>
-    ///     if the packet is encrypted; otherwise,
-    ///     <c>
-    ///         false
-    ///     </c>
-    /// </param>
-    public Packet(ref Span<byte> span, bool isEncrypted)
+    public Packet(ref Span<byte> span)
     {
         Signature = span[0];
         OpCode = span[3];
         Sequence = span[4];
-        IsEncrypted = isEncrypted;
 
-        var resultLength = span.Length - (IsEncrypted ? 5 : 4);
+        var resultLength = span.Length - 4;
         Buffer = span[^resultLength..];
     }
 
@@ -70,7 +55,6 @@ public ref struct Packet
         Signature = 170;
         Sequence = 0;
         Buffer = new Span<byte>();
-        IsEncrypted = false;
     }
 
     /// <summary>
@@ -119,11 +103,9 @@ public ref struct Packet
     /// </returns>
     public readonly Memory<byte> ToMemory()
     {
-        //the length of the packet after the length portion of the header plus the packet tail (determined by encryption type)
-        var resultLength = Buffer.Length + (IsEncrypted ? 5 : 4) - 3;
+        var resultLength = Buffer.Length + 4 - 3;
         var memBuffer = new byte[resultLength + 3];
 
-        //write packet header
         memBuffer[0] = Signature;
         memBuffer[1] = (byte)(resultLength / 256);
         memBuffer[2] = (byte)(resultLength % 256);
@@ -144,12 +126,10 @@ public ref struct Packet
     /// </returns>
     public Span<byte> ToSpan()
     {
-        //the length of the packet after the length portion of the header plus the packet tail (determined by encryption type)
-        var resultLength = Buffer.Length + (IsEncrypted ? 5 : 4) - 3;
+        var resultLength = Buffer.Length + 4 - 3;
 
         var resultBuffer = new Span<byte>(new byte[resultLength + 3])
         {
-            //write packet header
             [0] = Signature,
             [1] = (byte)(resultLength / 256),
             [2] = (byte)(resultLength % 256),

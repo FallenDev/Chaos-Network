@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using Chaos.Networking.Entities.Server;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
@@ -15,10 +16,12 @@ public abstract class ConnectedClientBase : SocketClientBase, IConnectedClient
     /// <inheritdoc />
     protected ConnectedClientBase(
         Socket socket,
+        X509Certificate serverCertificate,
         IPacketSerializer packetSerializer,
         ILogger<ConnectedClientBase> logger)
         : base(
             socket,
+            serverCertificate,
             packetSerializer,
             logger) { }
 

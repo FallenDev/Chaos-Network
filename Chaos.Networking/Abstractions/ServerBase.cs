@@ -1,7 +1,11 @@
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using Chaos.Common.Identity;
 using Chaos.Common.Synchronization;
-using Chaos.Extensions.Common;
+using Chaos.Extensions.Networking;
 using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
 using Chaos.Networking.Options;
@@ -12,6 +16,7 @@ using Chaos.Packets.Abstractions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Chaos.Extensions.Common;
 
 namespace Chaos.Networking.Abstractions;
 
@@ -24,17 +29,20 @@ namespace Chaos.Networking.Abstractions;
 public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IConnectedClient
 {
     /// <summary>
+    ///     Implements a thread-safe dictionary for storing connection attempts.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, (int Count, DateTime LastConnection)> ConnectionAttempts = [];
+    private const int MaxConnectionsPerMinute = 5;
+    private readonly TimeSpan ConnectionWindow = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    ///     The server certificate for SSL/TLS encryption.
+    /// </summary>
+    private readonly X509Certificate _serverCertificate;
+
+    /// <summary>
     ///     Delegate for handling client packets.
     /// </summary>
-    /// <param name="client">
-    ///     The client sending the packet.
-    /// </param>
-    /// <param name="packet">
-    ///     The client packet received.
-    /// </param>
-    /// <returns>
-    ///     A ValueTask representing the asynchronous operation.
-    /// </returns>
     public delegate ValueTask ClientHandler(T client, in Packet packet);
 
     /// <summary>
@@ -84,12 +92,14 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <param name="packetSerializer">An instance of a packet serializer.</param>
     /// <param name="clientRegistry">An instance of a client registry.</param>
     /// <param name="options">Configuration options for the server.</param>
+    /// <param name="serverCertificate">The server's SSL/TLS certificate.</param>
     /// <param name="logger">A logger for the server.</param>
     protected ServerBase(
         IRedirectManager redirectManager,
         IPacketSerializer packetSerializer,
         IClientRegistry<T> clientRegistry,
         IOptions<ServerOptions> options,
+        X509Certificate serverCertificate,
         ILogger<ServerBase<T>> logger)
     {
         Options = options.Value;
@@ -98,6 +108,8 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         ClientRegistry = clientRegistry;
         PacketSerializer = packetSerializer;
         ClientHandlers = new ClientHandler?[byte.MaxValue];
+        _serverCertificate = serverCertificate;
+
         Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         ConfigureTcpSocket(Socket);
         Sync = new FifoAutoReleasingSemaphoreSlim(1, 15, $"{GetType().Name}");
@@ -382,8 +394,4 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         tcpSocket.SendTimeout = 1000;
         tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
     }
-
-    private readonly ConcurrentDictionary<string, (int Count, DateTime LastConnection)> ConnectionAttempts = new();
-    private const int MaxConnectionsPerMinute = 5;
-    private readonly TimeSpan ConnectionWindow = TimeSpan.FromMinutes(1);
 }
