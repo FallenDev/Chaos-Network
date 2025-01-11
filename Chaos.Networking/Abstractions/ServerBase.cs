@@ -387,11 +387,11 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     {
         tcpSocket.LingerState = new LingerOption(false, 0);
         tcpSocket.NoDelay = true;
-        tcpSocket.Blocking = false;
-        tcpSocket.ReceiveBufferSize = 16384;
-        tcpSocket.SendBufferSize = 16384;
-        tcpSocket.ReceiveTimeout = 1000;
-        tcpSocket.SendTimeout = 1000;
+        tcpSocket.Blocking = true;
+        tcpSocket.ReceiveBufferSize = 32768;
+        tcpSocket.SendBufferSize = 32768;
+        tcpSocket.ReceiveTimeout = 5000;
+        tcpSocket.SendTimeout = 5000;
         tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
     }
 }
