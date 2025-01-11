@@ -15,7 +15,7 @@ public abstract class LoginClientBase : ConnectedClientBase, ILoginClient
     /// <inheritdoc />
     protected LoginClientBase(
         Socket socket,
-        X509Certificate serverCertificate,
+        X509Certificate2 serverCertificate,
         IPacketSerializer packetSerializer,
         ILogger<ConnectedClientBase> logger)
         : base(

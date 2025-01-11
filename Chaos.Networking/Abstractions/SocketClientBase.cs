@@ -74,7 +74,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     /// <param name="logger"></param>
     protected SocketClientBase(
         Socket socket,
-        X509Certificate serverCertificate, // Add server certificate parameter
+        X509Certificate2 serverCertificate,
         IPacketSerializer packetSerializer,
         ILogger<SocketClientBase> logger)
     {

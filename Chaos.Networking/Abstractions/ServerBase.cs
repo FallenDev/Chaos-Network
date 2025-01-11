@@ -38,7 +38,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <summary>
     ///     The server certificate for SSL/TLS encryption.
     /// </summary>
-    protected readonly X509Certificate ServerCertificate;
+    protected readonly X509Certificate2 ServerCertificate;
 
     /// <summary>
     ///     Delegate for handling client packets.
@@ -99,7 +99,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         IPacketSerializer packetSerializer,
         IClientRegistry<T> clientRegistry,
         IOptions<ServerOptions> options,
-        X509Certificate serverCertificate,
+        X509Certificate2 serverCertificate,
         ILogger<ServerBase<T>> logger)
     {
         Options = options.Value;
