@@ -38,7 +38,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <summary>
     ///     The server certificate for SSL/TLS encryption.
     /// </summary>
-    private readonly X509Certificate _serverCertificate;
+    protected readonly X509Certificate ServerCertificate;
 
     /// <summary>
     ///     Delegate for handling client packets.
@@ -108,7 +108,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         ClientRegistry = clientRegistry;
         PacketSerializer = packetSerializer;
         ClientHandlers = new ClientHandler?[byte.MaxValue];
-        _serverCertificate = serverCertificate;
+        ServerCertificate = serverCertificate;
 
         Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         ConfigureTcpSocket(Socket);

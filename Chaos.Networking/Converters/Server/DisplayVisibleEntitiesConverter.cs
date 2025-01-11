@@ -30,7 +30,7 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
 
             switch (sprite)
             {
-                case >= NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET:
+                case >= NetworkingConstants.ItemSpriteOffset:
                 {
                     var color = reader.ReadByte();
                     _ = reader.ReadBytes(2); //LI: what is this for?
@@ -41,13 +41,13 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
                             X = point.X,
                             Y = point.Y,
                             Id = id,
-                            Sprite = (ushort)(sprite - NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET),
+                            Sprite = (ushort)(sprite - NetworkingConstants.ItemSpriteOffset),
                             Color = (DisplayColor)color
                         });
 
                     break;
                 }
-                case >= NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET:
+                case >= NetworkingConstants.CreatureSpriteOffset:
                 {
                     _ = reader.ReadBytes(4); //LI: what is this for?
                     var direction = reader.ReadByte();
@@ -59,7 +59,7 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
                         X = point.X,
                         Y = point.Y,
                         Id = id,
-                        Sprite = (ushort)(sprite - NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET),
+                        Sprite = (ushort)(sprite - NetworkingConstants.CreatureSpriteOffset),
                         Direction = (Direction)direction,
                         CreatureType = (CreatureType)creatureType
                     };
@@ -94,7 +94,7 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
             {
                 case CreatureInfo creature:
                 {
-                    writer.WriteUInt16((ushort)(obj.Sprite + NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET));
+                    writer.WriteUInt16((ushort)(obj.Sprite + NetworkingConstants.CreatureSpriteOffset));
                     writer.WriteBytes(new byte[4]); //LI: what is this for?
                     writer.WriteByte((byte)creature.Direction);
                     writer.WriteByte(0); //LI: what is this for?
@@ -106,7 +106,7 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
                     break;
                 }
                 case GroundItemInfo groundItem:
-                    writer.WriteUInt16((ushort)(obj.Sprite + NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET));
+                    writer.WriteUInt16((ushort)(obj.Sprite + NetworkingConstants.ItemSpriteOffset));
                     writer.WriteByte((byte)groundItem.Color);
                     writer.WriteBytes(new byte[2]);
 

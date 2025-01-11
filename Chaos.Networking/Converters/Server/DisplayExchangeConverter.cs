@@ -55,7 +55,7 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
 
                 args.RightSide = rightSide;
                 args.ExchangeIndex = exchangeIndex;
-                args.ItemSprite = (ushort)(itemSprite - NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET);
+                args.ItemSprite = (ushort)(itemSprite - NetworkingConstants.ItemSpriteOffset);
                 args.ItemColor = (DisplayColor)itemColor;
                 args.ItemName = itemName;
 
@@ -120,7 +120,7 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
             case ExchangeResponseType.AddItem:
                 writer.WriteBoolean(args.RightSide!.Value);
                 writer.WriteByte(args.ExchangeIndex!.Value);
-                writer.WriteUInt16((ushort)(args.ItemSprite!.Value + NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET));
+                writer.WriteUInt16((ushort)(args.ItemSprite!.Value + NetworkingConstants.ItemSpriteOffset));
                 writer.WriteByte((byte)args.ItemColor!.Value);
                 writer.WriteString8(args.ItemName!);
 

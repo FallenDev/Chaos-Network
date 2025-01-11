@@ -21,7 +21,7 @@ namespace Chaos.Networking.Abstractions;
 /// </summary>
 public abstract class SocketClientBase : ISocketClient, IDisposable
 {
-    private readonly SslStream _sslStream;
+    private readonly SslStream SslStream;
 
     private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
     private int Count;
@@ -82,10 +82,10 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         Socket = socket;
 
         // Wrap the socket in an SslStream
-        _sslStream = new SslStream(new NetworkStream(socket), false);
+        SslStream = new SslStream(new NetworkStream(socket), false);
 
         // Authenticate as client (or server depending on the use case)
-        _sslStream.AuthenticateAsClient("ServerName"); // Replace with actual server name if needed.
+        SslStream.AuthenticateAsClient("ServerName"); // Replace with actual server name if needed.
 
         MemoryOwner = MemoryPool<byte>.Shared.Rent(ushort.MaxValue * 4);
         MemoryHandle = Memory.Pin();
@@ -103,7 +103,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     /// <inheritdoc />
     public virtual void Dispose()
     {
-        _sslStream.Dispose();
+        SslStream.Dispose();
         GC.SuppressFinalize(this);
 
         try
@@ -260,7 +260,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         if (!Connected) return;
 
         var data = packet.ToMemory().ToArray();
-        _sslStream.Write(data, 0, data.Length);
+        SslStream.Write(data, 0, data.Length);
     }
 
     /// <inheritdoc />

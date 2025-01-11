@@ -6,22 +6,22 @@ namespace Chaos.Networking.Definitions;
 /// <summary>
 ///     Represents the constants used by the networking layer
 /// </summary>
-public static class NETWORKING_CONSTANTS
+public static class NetworkingConstants
 {
     /// <summary>
     ///     The offset value for a creature's sprite
     /// </summary>
-    internal const ushort CREATURE_SPRITE_OFFSET = 16384;
+    internal const ushort CreatureSpriteOffset = 16384;
 
     /// <summary>
     ///     The offset value for an item's sprite
     /// </summary>
-    internal const ushort ITEM_SPRITE_OFFSET = 32768;
+    internal const ushort ItemSpriteOffset = 32768;
 
     /// <summary>
     ///     The order in which equipment slots are sent to the client
     /// </summary>
-    public static readonly ImmutableArray<EquipmentSlot> PROFILE_EQUIPMENTSLOT_ORDER =
+    public static readonly ImmutableArray<EquipmentSlot> ProfileEquipmentslotOrder =
     [
         EquipmentSlot.Weapon,
         EquipmentSlot.Armor,

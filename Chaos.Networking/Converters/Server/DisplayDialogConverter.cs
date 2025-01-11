@@ -50,12 +50,12 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
 
         switch (sprite)
         {
-            case > NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET:
-                sprite -= NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET;
+            case > NetworkingConstants.ItemSpriteOffset:
+                sprite -= NetworkingConstants.ItemSpriteOffset;
 
                 break;
-            case > NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET:
-                sprite -= NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET;
+            case > NetworkingConstants.CreatureSpriteOffset:
+                sprite -= NetworkingConstants.CreatureSpriteOffset;
 
                 break;
         }
@@ -149,11 +149,11 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
             switch (args.EntityType)
             {
                 case EntityType.Item:
-                    offsetSprite += NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET;
+                    offsetSprite += NetworkingConstants.ItemSpriteOffset;
 
                     break;
                 case EntityType.Aisling or EntityType.Creature:
-                    offsetSprite += NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET;
+                    offsetSprite += NetworkingConstants.CreatureSpriteOffset;
 
                     break;
             }

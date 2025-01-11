@@ -40,7 +40,7 @@ public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAisling
             var bootsColor = reader.ReadByte();
             _ = reader.ReadBytes(6); //LI: what is this for? (maybe lanternSize, restPosition, isTransparent)?
 
-            args.Sprite = (ushort)(sprite - NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET);
+            args.Sprite = (ushort)(sprite - NetworkingConstants.CreatureSpriteOffset);
             args.HeadColor = (DisplayColor)headColor;
             args.BootsColor = (DisplayColor)bootsColor;
         } else
@@ -130,7 +130,7 @@ public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAisling
         } else if (args.Sprite.HasValue)
         {
             writer.WriteUInt16(ushort.MaxValue);
-            writer.WriteUInt16((ushort)(args.Sprite.Value + NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET));
+            writer.WriteUInt16((ushort)(args.Sprite.Value + NetworkingConstants.CreatureSpriteOffset));
             writer.WriteByte((byte)args.HeadColor);
             writer.WriteByte((byte)args.BootsColor);
             writer.WriteBytes(new byte[6]);

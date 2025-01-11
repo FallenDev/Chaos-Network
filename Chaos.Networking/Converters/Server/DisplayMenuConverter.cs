@@ -39,12 +39,12 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
 
         switch (sprite)
         {
-            case > NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET:
-                sprite -= NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET;
+            case > NetworkingConstants.ItemSpriteOffset:
+                sprite -= NetworkingConstants.ItemSpriteOffset;
 
                 break;
-            case > NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET:
-                sprite -= NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET;
+            case > NetworkingConstants.CreatureSpriteOffset:
+                sprite -= NetworkingConstants.CreatureSpriteOffset;
 
                 break;
         }
@@ -134,7 +134,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
                     items.Add(
                         new ItemInfo
                         {
-                            Sprite = (ushort)(itemSprite - NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET),
+                            Sprite = (ushort)(itemSprite - NetworkingConstants.ItemSpriteOffset),
                             Color = (DisplayColor)itemColor,
                             Cost = cost,
                             Name = itemName
@@ -239,11 +239,11 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
             switch (args.EntityType)
             {
                 case EntityType.Item:
-                    offsetSprite += NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET;
+                    offsetSprite += NetworkingConstants.ItemSpriteOffset;
 
                     break;
                 case EntityType.Aisling or EntityType.Creature:
-                    offsetSprite += NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET;
+                    offsetSprite += NetworkingConstants.CreatureSpriteOffset;
 
                     break;
             }
@@ -304,7 +304,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
 
                 foreach (var item in args.Items)
                 {
-                    writer.WriteUInt16((ushort)(item.Sprite + NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET));
+                    writer.WriteUInt16((ushort)(item.Sprite + NetworkingConstants.ItemSpriteOffset));
                     writer.WriteByte((byte)item.Color);
                     writer.WriteUInt32((uint)item.Cost!.Value);
                     writer.WriteString8(item.Name);

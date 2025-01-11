@@ -32,7 +32,7 @@ public sealed class AddItemToPaneConverter : PacketConverterBase<AddItemToPaneAr
             Item = new ItemInfo
             {
                 Slot = slot,
-                Sprite = (ushort)(sprite - NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET),
+                Sprite = (ushort)(sprite - NetworkingConstants.ItemSpriteOffset),
                 Color = (DisplayColor)color,
                 Name = name,
                 Count = count,
@@ -47,7 +47,7 @@ public sealed class AddItemToPaneConverter : PacketConverterBase<AddItemToPaneAr
     public override void Serialize(ref SpanWriter writer, AddItemToPaneArgs args)
     {
         writer.WriteByte(args.Item.Slot);
-        writer.WriteUInt16((ushort)(args.Item.Sprite + NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET));
+        writer.WriteUInt16((ushort)(args.Item.Sprite + NetworkingConstants.ItemSpriteOffset));
         writer.WriteByte((byte)args.Item.Color);
         writer.WriteString8(args.Item.Name);
         writer.WriteUInt32(args.Item.Count!.Value);

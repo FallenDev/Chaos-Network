@@ -21,9 +21,9 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
         var id = reader.ReadUInt32();
 
         //by default, all slots are populated with null
-        var equipment = NETWORKING_CONSTANTS.PROFILE_EQUIPMENTSLOT_ORDER.ToDictionary(val => val, _ => default(ItemInfo));
+        var equipment = NetworkingConstants.ProfileEquipmentslotOrder.ToDictionary(val => val, _ => default(ItemInfo));
 
-        foreach (var slot in NETWORKING_CONSTANTS.PROFILE_EQUIPMENTSLOT_ORDER)
+        foreach (var slot in NetworkingConstants.ProfileEquipmentslotOrder)
         {
             var sprite = reader.ReadUInt16();
             var color = reader.ReadByte();
@@ -31,7 +31,7 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
             //only add the item if the sprite is not 0
             if (sprite is not 0)
             {
-                sprite -= NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET;
+                sprite -= NetworkingConstants.ItemSpriteOffset;
 
                 equipment.Add(
                     slot,
@@ -105,14 +105,14 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
     {
         writer.WriteUInt32(args.Id);
 
-        foreach (var slot in NETWORKING_CONSTANTS.PROFILE_EQUIPMENTSLOT_ORDER)
+        foreach (var slot in NetworkingConstants.ProfileEquipmentslotOrder)
         {
             args.Equipment.TryGetValue(slot, out var item);
 
             var offsetSprite = item?.Sprite ?? 0;
 
             if (offsetSprite is not 0)
-                offsetSprite += NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET;
+                offsetSprite += NetworkingConstants.ItemSpriteOffset;
 
             writer.WriteUInt16(offsetSprite);
             writer.WriteByte((byte)(item?.Color ?? DisplayColor.Default));

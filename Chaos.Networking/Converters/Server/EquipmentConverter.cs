@@ -31,7 +31,7 @@ public sealed class EquipmentConverter : PacketConverterBase<EquipmentArgs>
             Slot = (EquipmentSlot)slot,
             Item = new ItemInfo
             {
-                Sprite = (ushort)(sprite - NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET),
+                Sprite = (ushort)(sprite - NetworkingConstants.ItemSpriteOffset),
                 Color = (DisplayColor)color,
                 Name = name,
                 MaxDurability = (int)maxDurability,
@@ -45,7 +45,7 @@ public sealed class EquipmentConverter : PacketConverterBase<EquipmentArgs>
     public override void Serialize(ref SpanWriter writer, EquipmentArgs args)
     {
         writer.WriteByte((byte)args.Slot);
-        writer.WriteUInt16((ushort)(args.Item.Sprite + NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET));
+        writer.WriteUInt16((ushort)(args.Item.Sprite + NetworkingConstants.ItemSpriteOffset));
         writer.WriteByte((byte)args.Item.Color);
         writer.WriteString8(args.Item.Name);
         writer.WriteByte(0); //LI: what is this for?
