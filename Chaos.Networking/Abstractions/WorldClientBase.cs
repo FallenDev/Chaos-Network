@@ -1,5 +1,4 @@
 using System.Net.Sockets;
-using Chaos.Cryptography.Abstractions;
 using Chaos.Networking.Entities.Server;
 using Chaos.Packets.Abstractions;
 using Microsoft.Extensions.Logging;
@@ -11,22 +10,13 @@ namespace Chaos.Networking.Abstractions;
 /// </summary>
 public abstract class WorldClientBase : ConnectedClientBase, IWorldClient
 {
-    private static readonly RefreshResponseArgs RefreshResponseArgs = new();
-    private static readonly CancelCastingArgs CancelCastingArgs = new();
-    private static readonly MapChangeCompleteArgs MapChangeCompleteArgs = new();
-    private static readonly MapChangePendingArgs MapChangePendingArgs = new();
-    private static readonly MapLoadCompleteArgs MapLoadCompleteArgs = new();
-    private static readonly EditableProfileRequestArgs EditableProfileRequestArgs = new();
-
     /// <inheritdoc />
     protected WorldClientBase(
         Socket socket,
-        ICrypto crypto,
         IPacketSerializer packetSerializer,
         ILogger<WorldClientBase> logger)
         : base(
             socket,
-            crypto,
             packetSerializer,
             logger) { }
 
@@ -49,7 +39,7 @@ public abstract class WorldClientBase : ConnectedClientBase, IWorldClient
     public virtual void SendBodyAnimation(BodyAnimationArgs args) => Send(args);
 
     /// <inheritdoc />
-    public virtual void SendCancelCasting() => Send(CancelCastingArgs);
+    public virtual void SendCancelCasting() => Send(new CancelCastingArgs());
 
     /// <inheritdoc />
     public virtual void SendClientWalkResponse(ClientWalkResponseArgs args) => Send(args);
@@ -91,7 +81,7 @@ public abstract class WorldClientBase : ConnectedClientBase, IWorldClient
     public virtual void SendDoors(DoorArgs args) => Send(args);
 
     /// <inheritdoc />
-    public virtual void SendEditableProfileRequest() => Send(EditableProfileRequestArgs);
+    public virtual void SendEditableProfileRequest() => Send(new EditableProfileRequestArgs());
 
     /// <inheritdoc />
     public virtual void SendEffect(EffectArgs args) => Send(args);
@@ -115,10 +105,10 @@ public abstract class WorldClientBase : ConnectedClientBase, IWorldClient
     public virtual void SendLocation(LocationArgs args) => Send(args);
 
     /// <inheritdoc />
-    public virtual void SendMapChangeComplete() => Send(MapChangeCompleteArgs);
+    public virtual void SendMapChangeComplete() => Send(new MapChangeCompleteArgs());
 
     /// <inheritdoc />
-    public virtual void SendMapChangePending() => Send(MapChangePendingArgs);
+    public virtual void SendMapChangePending() => Send(new MapChangePendingArgs());
 
     /// <inheritdoc />
     public virtual void SendMapData(MapDataArgs args) => Send(args);
@@ -127,7 +117,7 @@ public abstract class WorldClientBase : ConnectedClientBase, IWorldClient
     public virtual void SendMapInfo(MapInfoArgs args) => Send(args);
 
     /// <inheritdoc />
-    public virtual void SendMapLoadComplete() => Send(MapLoadCompleteArgs);
+    public virtual void SendMapLoadComplete() => Send(new MapLoadCompleteArgs());
 
     /// <inheritdoc />
     public virtual void SendMetaData(MetaDataArgs args) => Send(args);
@@ -139,7 +129,7 @@ public abstract class WorldClientBase : ConnectedClientBase, IWorldClient
     public virtual void SendOtherProfile(OtherProfileArgs args) => Send(args);
 
     /// <inheritdoc />
-    public virtual void SendRefreshResponse() => Send(RefreshResponseArgs);
+    public virtual void SendRefreshResponse() => Send(new RefreshResponseArgs());
 
     /// <inheritdoc />
     public virtual void SendRemoveEntity(RemoveEntityArgs args) => Send(args);

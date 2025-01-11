@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Sockets;
-
 using Chaos.Common.Synchronization;
 using Chaos.Extensions.Common;
 using Chaos.Networking.Abstractions.Definitions;
@@ -10,7 +9,6 @@ using Chaos.NLog.Logging.Definitions;
 using Chaos.NLog.Logging.Extensions;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
-
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -78,21 +76,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     ///     A semaphore for synchronizing access to the server.
     /// </summary>
     protected FifoAutoReleasingSemaphoreSlim Sync { get; }
-
-    /// <summary>
-    ///     The concurrent dictionary to track connection attempts.
-    /// </summary>
-    private readonly ConcurrentDictionary<string, (int Count, DateTime LastConnection)> ConnectionAttempts = [];
-
-    /// <summary>
-    ///     The maximum number of connections allowed per minute.
-    /// </summary>
-    private const int MaxConnectionsPerMinute = 5;
-
-    /// <summary>
-    ///     The window of time to track connection attempts.
-    /// </summary>
-    private readonly TimeSpan ConnectionWindow = TimeSpan.FromMinutes(1);
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="ServerBase{T}" /> class.
@@ -239,18 +222,14 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         var now = DateTime.UtcNow;
         var connectionData = ConnectionAttempts.GetOrAdd(ipAddress, _ => (0, now));
 
-        // If the last connection is older than the window, reset the count
         if ((now - connectionData.LastConnection) > ConnectionWindow)
         {
-            // Reset the count and update the timestamp
             ConnectionAttempts[ipAddress] = (1, now);
             return true;
         }
 
-        // If the connection count exceeds the maximum allowed, reject the connection
-        if (connectionData.Count >= MaxConnectionsPerMinute) return false;        
+        if (connectionData.Count >= MaxConnectionsPerMinute) return false;
 
-        // Otherwise, increment the count and allow the connection
         ConnectionAttempts[ipAddress] = (connectionData.Count + 1, connectionData.LastConnection);
         return true;
     }
@@ -283,7 +262,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        // List of real-time args
         var validArgsTypes = new HashSet<string>
         {
             "MapDataArgs",
@@ -305,17 +283,14 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
             "MetaDataRequestArgs"
         };
 
-        // Check if the args can execute in real-time
         if (validArgsTypes.Contains(args.GetType().Name))
         {
             await TryExecuteActionWithArgs(client, args, action);
         }
         else
         {
-            // Wait for lock if packets are lower priority
             await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
-            // If no lock could be acquired, log the information and return
             if (@lock == null)
             {
                 Logger.LogInformation($"Contention on {action.Method.Name}");
@@ -377,9 +352,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     public virtual ValueTask OnHeartBeatAsync(T client, in Packet packet)
     {
         _ = PacketSerializer.Deserialize<HeartBeatArgs>(in packet);
-
-        //do nothing
-
         return default;
     }
 
@@ -387,7 +359,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     public ValueTask OnSequenceChangeAsync(T client, in Packet packet)
     {
         client.SetSequence(packet.Sequence);
-
         return default;
     }
 
@@ -395,9 +366,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     public virtual ValueTask OnSynchronizeTicksAsync(T client, in Packet packet)
     {
         _ = PacketSerializer.Deserialize<SynchronizeTicksArgs>(in packet);
-
-        //do nothing
-
         return default;
     }
 
@@ -405,24 +373,17 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
 
     private static void ConfigureTcpSocket(Socket tcpSocket)
     {
-        // The socket will not linger when Socket.Close is called
         tcpSocket.LingerState = new LingerOption(false, 0);
-
-        // Disable the Nagle Algorithm for low-latency communication
         tcpSocket.NoDelay = true;
-
-        // Allows server to process multiple clients concurrently without blocking until data is read/written
         tcpSocket.Blocking = false;
-
-        // Smaller buffer size (8 KB) to ensure latency remains low, especially for legacy clients
         tcpSocket.ReceiveBufferSize = 16384;
         tcpSocket.SendBufferSize = 16384;
-
-        // Short timeouts to avoid latency buildup
         tcpSocket.ReceiveTimeout = 1000;
         tcpSocket.SendTimeout = 1000;
-
-        // Enable TCP keep-alive to detect stale connections
         tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
     }
+
+    private readonly ConcurrentDictionary<string, (int Count, DateTime LastConnection)> ConnectionAttempts = new();
+    private const int MaxConnectionsPerMinute = 5;
+    private readonly TimeSpan ConnectionWindow = TimeSpan.FromMinutes(1);
 }

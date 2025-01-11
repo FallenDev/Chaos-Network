@@ -1,5 +1,4 @@
 using System.Net.Sockets;
-using Chaos.Cryptography.Abstractions;
 using Chaos.Networking.Entities.Server;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
@@ -16,12 +15,10 @@ public abstract class ConnectedClientBase : SocketClientBase, IConnectedClient
     /// <inheritdoc />
     protected ConnectedClientBase(
         Socket socket,
-        ICrypto crypto,
         IPacketSerializer packetSerializer,
         ILogger<ConnectedClientBase> logger)
         : base(
             socket,
-            crypto,
             packetSerializer,
             logger) { }
 
@@ -62,10 +59,4 @@ public abstract class ConnectedClientBase : SocketClientBase, IConnectedClient
 
         Send(args);
     }
-
-    /// <inheritdoc />
-    public override void Encrypt(ref Packet packet) => Crypto.ServerEncrypt(ref packet.Buffer, packet.OpCode, packet.Sequence);
-
-    /// <inheritdoc />
-    public override bool IsEncrypted(byte opCode) => Crypto.IsServerEncrypted(opCode);
 }

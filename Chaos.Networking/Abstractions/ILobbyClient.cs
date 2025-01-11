@@ -11,16 +11,10 @@ public interface ILobbyClient : IConnectedClient
     /// <summary>
     ///     Sends the connection information to the client.
     /// </summary>
-    /// <remarks>
-    ///     Opcode: <see cref="ServerOpCode.ConnectionInfo" />
-    /// </remarks>
     void SendConnectionInfo(ConnectionInfoArgs args);
 
     /// <summary>
     ///     Sends the server table response to the client.
     /// </summary>
-    /// <remarks>
-    ///     Opcode: <see cref="ServerOpCode.ServerTableResponse" />
-    /// </remarks>
     void SendServerTableResponse(ServerTableResponseArgs args);
 }

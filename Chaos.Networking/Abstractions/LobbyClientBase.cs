@@ -1,5 +1,4 @@
 using System.Net.Sockets;
-using Chaos.Cryptography.Abstractions;
 using Chaos.Networking.Entities.Server;
 using Chaos.Packets.Abstractions;
 using Microsoft.Extensions.Logging;
@@ -14,12 +13,10 @@ public abstract class LobbyClientBase : ConnectedClientBase, ILobbyClient
     /// <inheritdoc />
     protected LobbyClientBase(
         Socket socket,
-        ICrypto crypto,
         IPacketSerializer packetSerializer,
         ILogger<LobbyClientBase> logger)
         : base(
             socket,
-            crypto,
             packetSerializer,
             logger) { }
 
