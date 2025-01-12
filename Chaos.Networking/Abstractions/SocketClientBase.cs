@@ -110,7 +110,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         using var store = new X509Store(StoreName.My, StoreLocation.LocalMachine);
         store.Open(OpenFlags.ReadOnly);
 
-        var certs = store.Certificates.Find(X509FindType.FindBySubjectName, "ZolianAuth", validOnly: false);
+        var certs = store.Certificates.Find(X509FindType.FindBySubjectName, "localhost", validOnly: false).Where(c => c.FriendlyName == "ZolianAuth").ToList();
 
         if (certs.Count > 0)
         {
