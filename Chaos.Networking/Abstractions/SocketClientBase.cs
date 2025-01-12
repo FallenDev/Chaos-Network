@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Chaos.Common.Identity;
@@ -22,6 +23,11 @@ namespace Chaos.Networking.Abstractions;
 public abstract class SocketClientBase : ISocketClient, IDisposable
 {
     private readonly SslStream SslStream;
+
+    /// <summary>
+    ///     The server certificate for SSL/TLS encryption.
+    /// </summary>
+    public X509Certificate2 ServerCertificate { get; private set; }
 
     private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
     private int Count;
@@ -69,23 +75,22 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     ///     Initializes a new instance of the <see cref="SocketClientBase" /> class.
     /// </summary>
     /// <param name="socket"></param>
-    /// <param name="serverCertificate"></param>
     /// <param name="packetSerializer"></param>
     /// <param name="logger"></param>
     protected SocketClientBase(
         Socket socket,
-        X509Certificate2 serverCertificate,
         IPacketSerializer packetSerializer,
         ILogger<SocketClientBase> logger)
     {
         Id = SequentialIdGenerator<uint>.Shared.NextId;
         Socket = socket;
+        ServerCertificate = LoadCertificateFromStore();
 
         // Wrap the socket in an SslStream
         SslStream = new SslStream(new NetworkStream(socket), false);
 
         // Authenticate as client (or server depending on the use case)
-        SslStream.AuthenticateAsClient("ServerName"); // Replace with actual server name if needed.
+        SslStream.AuthenticateAsServer(ServerCertificate, false, SslProtocols.Tls12, true);
 
         MemoryOwner = MemoryPool<byte>.Shared.Rent(ushort.MaxValue * 4);
         MemoryHandle = Memory.Pin();
@@ -98,6 +103,21 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                                     .Select(_ => CreateArgs());
         SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
         Connected = false;
+    }
+
+    private static X509Certificate2 LoadCertificateFromStore()
+    {
+        using var store = new X509Store(StoreName.My, StoreLocation.LocalMachine);
+        store.Open(OpenFlags.ReadOnly);
+
+        var certs = store.Certificates.Find(X509FindType.FindBySubjectName, "ZolianAuth", validOnly: false);
+
+        if (certs.Count > 0)
+        {
+            return certs[0];
+        }
+
+        throw new Exception("Certificate not found in the store.");
     }
 
     /// <inheritdoc />

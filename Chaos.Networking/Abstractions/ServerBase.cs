@@ -36,11 +36,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     private readonly TimeSpan ConnectionWindow = TimeSpan.FromMinutes(1);
 
     /// <summary>
-    ///     The server certificate for SSL/TLS encryption.
-    /// </summary>
-    protected readonly X509Certificate2 ServerCertificate;
-
-    /// <summary>
     ///     Delegate for handling client packets.
     /// </summary>
     public delegate ValueTask ClientHandler(T client, in Packet packet);
@@ -92,14 +87,12 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <param name="packetSerializer">An instance of a packet serializer.</param>
     /// <param name="clientRegistry">An instance of a client registry.</param>
     /// <param name="options">Configuration options for the server.</param>
-    /// <param name="serverCertificate">The server's SSL/TLS certificate.</param>
     /// <param name="logger">A logger for the server.</param>
     protected ServerBase(
         IRedirectManager redirectManager,
         IPacketSerializer packetSerializer,
         IClientRegistry<T> clientRegistry,
         IOptions<ServerOptions> options,
-        X509Certificate2 serverCertificate,
         ILogger<ServerBase<T>> logger)
     {
         Options = options.Value;
@@ -108,7 +101,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         ClientRegistry = clientRegistry;
         PacketSerializer = packetSerializer;
         ClientHandlers = new ClientHandler?[byte.MaxValue];
-        ServerCertificate = serverCertificate;
 
         Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         ConfigureTcpSocket(Socket);

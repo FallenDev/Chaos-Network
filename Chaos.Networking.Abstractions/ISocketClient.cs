@@ -1,6 +1,8 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
+
 using Chaos.Common.Synchronization;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
@@ -12,6 +14,8 @@ namespace Chaos.Networking.Abstractions;
 /// </summary>
 public interface ISocketClient
 {
+    X509Certificate2 ServerCertificate { get; }
+
     /// <summary>
     ///     Whether or not the client is connected.
     /// </summary>

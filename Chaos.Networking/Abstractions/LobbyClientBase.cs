@@ -15,12 +15,10 @@ public abstract class LobbyClientBase : ConnectedClientBase, ILobbyClient
     /// <inheritdoc />
     protected LobbyClientBase(
         Socket socket,
-        X509Certificate2 serverCertificate,
         IPacketSerializer packetSerializer,
         ILogger<ConnectedClientBase> logger)
         : base(
             socket,
-            serverCertificate,
             packetSerializer,
             logger) { }
 
