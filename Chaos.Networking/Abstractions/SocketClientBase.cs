@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+
 using Chaos.Common.Identity;
 using Chaos.Common.Synchronization;
 using Chaos.Extensions.Networking;
@@ -13,6 +14,7 @@ using Chaos.NLog.Logging.Definitions;
 using Chaos.NLog.Logging.Extensions;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
+
 using Microsoft.Extensions.Logging;
 
 namespace Chaos.Networking.Abstractions;
@@ -177,109 +179,126 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         Connected = true;
         await Task.Yield();
 
-        var args = new SocketAsyncEventArgs();
-        args.SetBuffer(Memory);
-        args.Completed += ReceiveEventHandler;
-        Socket.ReceiveAndForget(args, ReceiveEventHandler);
-    }
-
-    private async void ReceiveEventHandler(object? sender, SocketAsyncEventArgs e)
-    {
-        await ReceiveSync.WaitAsync()
-                         .ConfigureAwait(false);
-
         try
         {
-            var shouldReset = false;
-            var count = e.BytesTransferred;
+            Logger.LogInformation("BeginReceive started.");
 
-            if (count == 0)
+            while (Connected)
             {
-                Disconnect();
-                return;
-            }
+                // Read decrypted data directly from SslStream
+                int bytesRead = await SslStream.ReadAsync(Memory).ConfigureAwait(false);
 
-            Count += count;
+                if (bytesRead > 0)
+                {
+                    Logger.LogInformation("Decrypted data written to buffer: {BufferHex}",
+                        BitConverter.ToString(Memory.Span.Slice(0, bytesRead).ToArray()));
+
+                    // Process the data using ReceiveEventHandler logic
+                    await ProcessDecryptedData(bytesRead).ConfigureAwait(false);
+                }
+                else
+                {
+                    Logger.LogWarning("No data read from SslStream. Disconnecting.");
+                    Disconnect();
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error in BeginReceive.");
+            Disconnect();
+        }
+    }
+
+    private async Task ProcessDecryptedData(int bytesRead)
+    {
+        try
+        {
+            Memory<byte> memorySlice = Memory[..bytesRead];
+            Count += bytesRead;
             var offset = 0;
 
-            while (Count > 3)
+            Logger.LogInformation("Processing decrypted data. BytesRead={BytesRead}, TotalCount={TotalCount}", bytesRead, Count);
+
+            while (Count > 4) // Ensure there’s enough for Signature, Length, OpCode, and Sequence
             {
-                var packetLength = (Buffer[offset + 1] << 8) + Buffer[offset + 2] + 3;
+                Logger.LogInformation("Parsing packet at offset {Offset}. Count={Count}", offset, Count);
 
+                // Verify signature
+                if (memorySlice.Span[offset] != 0x16) // 22
+                {
+                    Logger.LogWarning("Invalid packet signature at offset {Offset}. Disconnecting client.", offset);
+                    Disconnect();
+                    return;
+                }
+
+                // Extract length
+                var length = (memorySlice.Span[offset + 1] << 8) | memorySlice.Span[offset + 2]; // Big-endian
+                var packetLength = length + 5; // Include Signature, Length, OpCode, Sequence
+
+                Logger.LogInformation("Extracted packet length: {PacketLength}. Count={Count}", packetLength, Count);
+
+                // Wait for the rest of the packet to arrive
                 if (Count < packetLength)
+                {
+                    Logger.LogInformation("Partial packet received. Waiting for more data. Needed={Needed}, Available={Available}",
+                        packetLength - Count, Count);
                     break;
-
-                if (Count < 4)
-                    break;
+                }
 
                 try
                 {
-                    await HandlePacketAsync(Buffer.Slice(offset, packetLength))
-                        .ConfigureAwait(false);
+                    // Extract and process the complete packet
+                    var packetSpan = memorySlice.Span.Slice(offset, packetLength);
+                    Logger.LogInformation("Processing packet: {PacketHex}", BitConverter.ToString(packetSpan.ToArray()));
+                    await HandlePacketAsync(packetSpan).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    void InnerCatch()
-                    {
-                        var buffer = Buffer.TrimEnd((byte)0);
-                        var hex = BitConverter.ToString(buffer.ToArray())
-                                              .Replace("-", " ");
-                        var ascii = Encoding.ASCII.GetString(buffer);
-
-                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet, Topics.Actions.Processing)
-                              .WithProperty(this)
-                              .LogError(
-                                  ex,
-                                  "Exception while handling a packet for {@ClientType}. (Count: {Count}, Offset: {Offset}, BufferHex: {BufferHex}, BufferAscii: {BufferAscii})",
-                                  GetType().Name,
-                                  Count,
-                                  offset,
-                                  hex,
-                                  ascii);
-                    }
-
-                    InnerCatch();
-                    shouldReset = true;
+                    Logger.LogError(ex, "Error processing packet at offset {Offset}. Resetting Count.", offset);
+                    Count = 0; // Reset count if there's a processing error
+                    break;
                 }
 
                 Count -= packetLength;
                 offset += packetLength;
+
+                Logger.LogInformation("Processed packet. Remaining Count={Count}, NextOffset={Offset}", Count, offset);
             }
 
-            if (shouldReset)
-                Count = 0;
-
             if (Count > 0)
-                Buffer.Slice(offset, Count)
-                      .CopyTo(Buffer);
-
-            e.SetBuffer(Memory[Count..]);
-            Socket.ReceiveAndForget(e, ReceiveEventHandler);
+            {
+                // Move remaining data to the start of the buffer
+                memorySlice.Slice(offset, Count).CopyTo(Memory);
+                Logger.LogInformation("Moved remaining data. New Count={Count}", Count);
+            }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            Disconnect();
-        }
-        finally
-        {
-            if (Connected)
-                ReceiveSync.Release();
+            Logger.LogError(ex, "Error in ProcessDecryptedData.");
         }
     }
 
-    /// <inheritdoc />
     public virtual void Send<T>(T obj) where T : IPacketSerializable
     {
+        // Serialize the object into a packet
         var packet = PacketSerializer.Serialize(obj);
         Send(ref packet);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Sends a packet using the SslStream.
+    /// </summary>
+    /// <param name="packet">The packet to send.</param>
     public virtual void Send(ref Packet packet)
     {
         if (!Connected) return;
 
-        var data = packet.ToMemory().ToArray();
+        // Convert the packet to a byte array
+        var data = packet.ToArray();
+
+        // Write the packet data to the SslStream
         SslStream.Write(data, 0, data.Length);
     }
 

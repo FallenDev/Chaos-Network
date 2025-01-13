@@ -1,152 +1,108 @@
 using System.Text;
 
-namespace Chaos.Packets;
+using Microsoft.Extensions.Logging;
 
-/// <summary>
-///     Represents a packet of data
-/// </summary>
-public ref struct Packet
+namespace Chaos.Packets
 {
     /// <summary>
-    ///     The buffer containing the packet data
+    /// Represents a packet of data in the custom application protocol.
     /// </summary>
-    public Span<byte> Buffer;
-
-    /// <summary>
-    ///     A value used to identify the type of packet and its purpose
-    /// </summary>
-    public byte OpCode { get; }
-
-    /// <summary>
-    ///     A value used to ensure packets are processed in the correct order
-    /// </summary>
-    public byte Sequence { get; set; }
-
-    /// <summary>
-    ///     A value used to identify the start of a packet's payload
-    /// </summary>
-    public byte Signature { get; }
-
-    /// <summary>
-    ///     Initializes a new instance of the <see cref="Packet" /> struct with the specified buffer.
-    /// </summary>
-    /// <param name="span">
-    ///     The buffer containing the packet data.
-    /// </param>
-    public Packet(ref Span<byte> span)
+    public ref struct Packet
     {
-        Signature = span[0];
-        OpCode = span[3];
-        Sequence = span[4];
+        public byte Signature { get; }
+        public ushort Length { get; }
+        public byte OpCode { get; }
+        public byte Sequence { get; set; }
+        public Span<byte> Payload { get; }
 
-        var resultLength = span.Length - 4;
-        Buffer = span[^resultLength..];
-    }
-
-    /// <summary>
-    ///     Initializes a new instance of the <see cref="Packet" /> struct with the specified operation code.
-    /// </summary>
-    /// <param name="opcode">
-    ///     The operation code of the packet.
-    /// </param>
-    public Packet(byte opcode)
-    {
-        OpCode = opcode;
-        Signature = 170;
-        Sequence = 0;
-        Buffer = new Span<byte>();
-    }
-
-    /// <summary>
-    ///     Returns the packet data as an ASCII string.
-    /// </summary>
-    /// <param name="replaceNewline">
-    ///     Whether to replace newline characters with spaces. Default is true.
-    /// </param>
-    /// <returns>
-    ///     The packet data as an ASCII string.
-    /// </returns>
-    public readonly string GetAsciiString(bool replaceNewline = true)
-    {
-        var str = Encoding.ASCII.GetString(Buffer);
-
-        if (replaceNewline)
-            str = str.Replace((char)10, ' ')
-                     .Replace((char)13, ' ');
-
-        return str;
-    }
-
-    /// <summary>
-    ///     Returns the packet data as a hexadecimal string.
-    /// </summary>
-    /// <returns>
-    ///     The packet data as a hexadecimal string.
-    /// </returns>
-    public string GetHexString() => $"{OpCode}: {BitConverter.ToString(Buffer.ToArray()).Replace("-", " ")}";
-
-    /// <summary>
-    ///     Converts the packet data to a byte array.
-    /// </summary>
-    /// <returns>
-    ///     The packet data as a byte array.
-    /// </returns>
-    public byte[] ToArray()
-        => ToSpan()
-            .ToArray();
-
-    /// <summary>
-    ///     Converts the packet data to a <see cref="Memory{T}" /> instance.
-    /// </summary>
-    /// <returns>
-    ///     The packet data as a <see cref="Memory{T}" /> instance.
-    /// </returns>
-    public readonly Memory<byte> ToMemory()
-    {
-        var resultLength = Buffer.Length + 4 - 3;
-        var memBuffer = new byte[resultLength + 3];
-
-        memBuffer[0] = Signature;
-        memBuffer[1] = (byte)(resultLength / 256);
-        memBuffer[2] = (byte)(resultLength % 256);
-        memBuffer[3] = OpCode;
-        memBuffer[4] = Sequence;
-
-        var memory = new Memory<byte>(memBuffer);
-        Buffer.CopyTo(memory.Span[^Buffer.Length..]);
-
-        return memory;
-    }
-
-    /// <summary>
-    ///     Converts the packet data to a <see cref="Span{T}" /> instance.
-    /// </summary>
-    /// <returns>
-    ///     The packet data as a <see cref="Span{T}" /> instance.
-    /// </returns>
-    public Span<byte> ToSpan()
-    {
-        var resultLength = Buffer.Length + 4 - 3;
-
-        var resultBuffer = new Span<byte>(new byte[resultLength + 3])
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Packet"/> struct from a span of bytes.
+        /// </summary>
+        /// <param name="span">The buffer containing the packet data.</param>
+        public Packet(ref Span<byte> span)
         {
-            [0] = Signature,
-            [1] = (byte)(resultLength / 256),
-            [2] = (byte)(resultLength % 256),
-            [3] = OpCode,
-            [4] = Sequence
-        };
+            if (span.Length < 5)
+                throw new ArgumentException("Span is too short to be a valid packet.");
 
-        Buffer.CopyTo(resultBuffer[^Buffer.Length..]);
+            Signature = span[0];
 
-        return resultBuffer;
+            // Extract length (big-endian)
+            var payloadLength = (span[1] << 8) | span[2];
+            Console.Write($"Extracted Length: {Length}, Span Length: {payloadLength}", payloadLength, span.Length);
+
+            // Validate total packet size
+            if (span.Length != 5 + payloadLength)
+            {
+                throw new ArgumentException(
+                    $"Span length ({span.Length}) does not match the total packet size (5 + {payloadLength}).");
+            }
+
+            OpCode = span[3];
+            Sequence = span[4];
+
+            // Extract the payload
+            Payload = span.Slice(5, payloadLength);
+        }
+
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Packet"/> struct with specified values.
+        /// </summary>
+        /// <param name="opCode">The operation code of the packet.</param>
+        /// <param name="sequence">The sequence number of the packet.</param>
+        /// <param name="payload">The payload data.</param>
+        public Packet(byte opCode, byte sequence, Span<byte> payload)
+        {
+            Signature = 0x16; // Custom signature
+            Length = (ushort)payload.Length;
+            OpCode = opCode;
+            Sequence = sequence;
+            Payload = payload;
+        }
+
+        public Packet(byte opCode, Span<byte> payload)
+        {
+            Signature = 0x16; // Custom signature
+            Length = (ushort)payload.Length;
+            OpCode = opCode;
+            Sequence = 0; // Default sequence
+            Payload = payload;
+        }
+
+
+        /// <summary>
+        /// Converts the packet to a byte array.
+        /// </summary>
+        /// <returns>The packet as a byte array.</returns>
+        public byte[] ToArray()
+        {
+            var buffer = new byte[5 + Payload.Length];
+            buffer[0] = Signature;
+            buffer[1] = (byte)(Length >> 8);
+            buffer[2] = (byte)(Length & 0xFF);
+            buffer[3] = OpCode;
+            buffer[4] = Sequence;
+            Payload.CopyTo(buffer.AsSpan(5));
+            return buffer;
+        }
+
+        /// <summary>
+        /// Returns the payload as an ASCII string.
+        /// </summary>
+        /// <param name="replaceNewline">Whether to replace newline characters with spaces.</param>
+        /// <returns>The payload as an ASCII string.</returns>
+        public string GetAsciiString(bool replaceNewline = true)
+        {
+            var str = Encoding.ASCII.GetString(Payload);
+            return replaceNewline ? str.Replace('\n', ' ').Replace('\r', ' ') : str;
+        }
+
+        /// <summary>
+        /// Returns a hexadecimal representation of the packet.
+        /// </summary>
+        public override string ToString()
+        {
+            return $"{OpCode}: {BitConverter.ToString(Payload.ToArray()).Replace("-", " ")}";
+        }
     }
-
-    /// <summary>
-    ///     Returns a string representation of the packet data as a hexadecimal string.
-    /// </summary>
-    /// <returns>
-    ///     A string representation of the packet data as a hexadecimal string.
-    /// </returns>
-    public override string ToString() => GetHexString();
 }
