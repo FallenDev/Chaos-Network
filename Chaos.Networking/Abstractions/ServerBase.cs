@@ -382,8 +382,9 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         tcpSocket.Blocking = true;
         tcpSocket.ReceiveBufferSize = 32768;
         tcpSocket.SendBufferSize = 32768;
-        tcpSocket.ReceiveTimeout = 5000;
-        tcpSocket.SendTimeout = 5000;
+        // ToDo: Adjust timeout to be double the expected ping time - for now leave it at 30 seconds
+        tcpSocket.ReceiveTimeout = 30000;
+        tcpSocket.SendTimeout = 30000;
         tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
     }
 }
