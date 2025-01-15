@@ -27,11 +27,6 @@ public interface ISocketClient
     uint Id { get; }
 
     /// <summary>
-    ///     A semaphoreslim that obeys FIFO rules.
-    /// </summary>
-    FifoSemaphoreSlim ReceiveSync { get; }
-
-    /// <summary>
     ///     The remote endpoint of the client.
     /// </summary>
     IPAddress RemoteIp { get; }

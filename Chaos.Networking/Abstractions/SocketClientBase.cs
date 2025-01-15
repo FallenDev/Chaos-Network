@@ -1,17 +1,10 @@
 using System.Buffers;
-using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
-
 using Chaos.Common.Identity;
-using Chaos.Common.Synchronization;
-using Chaos.Extensions.Networking;
-using Chaos.NLog.Logging.Definitions;
-using Chaos.NLog.Logging.Extensions;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
 
@@ -31,17 +24,12 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     /// </summary>
     public X509Certificate2 ServerCertificate { get; private set; }
 
-    private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
     private int Count;
     private int Sequence;
 
     /// <inheritdoc />
     public bool Connected { get; set; }
 
-    /// <summary>
-    ///     Whether or not to log raw packet data to Trace.
-    /// </summary>
-    public bool LogRawPackets { get; set; }
 
     /// <inheritdoc />
     public uint Id { get; }
@@ -59,17 +47,12 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     ///     The packet serializer for serializing and deserializing packets.
     /// </summary>
     protected IPacketSerializer PacketSerializer { get; }
-
-    /// <inheritdoc />
-    public FifoSemaphoreSlim ReceiveSync { get; }
-
+    
     /// <inheritdoc />
     public IPAddress RemoteIp { get; }
 
     /// <inheritdoc />
     public Socket Socket { get; }
-
-    private unsafe Span<byte> Buffer => new(MemoryHandle.Pointer, ushort.MaxValue * 4);
 
     private Memory<byte> Memory => MemoryOwner.Memory;
 
@@ -99,11 +82,6 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         Logger = logger;
         PacketSerializer = packetSerializer;
         RemoteIp = (Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
-        ReceiveSync = new FifoSemaphoreSlim(1, 1, $"{GetType().Name} {RemoteIp} (Socket)");
-
-        var initialArgs = Enumerable.Range(0, 5)
-                                    .Select(_ => CreateArgs());
-        SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
         Connected = false;
     }
 
@@ -156,13 +134,10 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         }
     }
 
-    /// <inheritdoc />
     public event EventHandler? OnDisconnected;
 
-    #region Actions
-    /// <inheritdoc />
     public virtual void SetSequence(byte newSequence) => Sequence = newSequence;
-    #endregion
+    
 
     /// <summary>
     ///     Asynchronously handles a span buffer as a packet.
@@ -172,7 +147,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     protected abstract ValueTask HandlePacketAsync(Span<byte> span);
 
     #region Networking
-    /// <inheritdoc />
+
     public virtual async void BeginReceive()
     {
         if (!Socket.Connected) return;
@@ -181,24 +156,19 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
         try
         {
-            Logger.LogInformation("BeginReceive started.");
-
             while (Connected)
             {
                 // Read decrypted data directly from SslStream
-                int bytesRead = await SslStream.ReadAsync(Memory).ConfigureAwait(false);
+                var bytesRead = await SslStream.ReadAsync(Memory).ConfigureAwait(false);
 
                 if (bytesRead > 0)
                 {
-                    Logger.LogInformation("Decrypted data written to buffer: {BufferHex}",
-                        BitConverter.ToString(Memory.Span.Slice(0, bytesRead).ToArray()));
-
                     // Process the data using ReceiveEventHandler logic
                     await ProcessDecryptedData(bytesRead).ConfigureAwait(false);
                 }
                 else
                 {
-                    Logger.LogWarning("No data read from SslStream. Disconnecting.");
+                    Logger.LogWarning("Client has been disconnected. {RemoteIp}", RemoteIp);
                     Disconnect();
                     break;
                 }
@@ -206,7 +176,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error in BeginReceive.");
+            Logger.LogError(ex, "Error - Disconnecting Client. {RemoteIp}", RemoteIp);
             Disconnect();
         }
     }
@@ -215,20 +185,16 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     {
         try
         {
-            Memory<byte> memorySlice = Memory[..bytesRead];
+            var memorySlice = Memory[..bytesRead];
             Count += bytesRead;
             var offset = 0;
 
-            Logger.LogInformation("Processing decrypted data. BytesRead={BytesRead}, TotalCount={TotalCount}", bytesRead, Count);
-
             while (Count > 4) // Ensure there’s enough for Signature, Length, OpCode, and Sequence
             {
-                Logger.LogInformation("Parsing packet at offset {Offset}. Count={Count}", offset, Count);
-
                 // Verify signature
                 if (memorySlice.Span[offset] != 0x16) // 22
                 {
-                    Logger.LogWarning("Invalid packet signature at offset {Offset}. Disconnecting client.", offset);
+                    Logger.LogWarning("Invalid packet signature at offset {Offset}. Disconnecting client. {RemoteIP}", offset, RemoteIp);
                     Disconnect();
                     return;
                 }
@@ -237,41 +203,29 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                 var length = (memorySlice.Span[offset + 1] << 8) | memorySlice.Span[offset + 2]; // Big-endian
                 var packetLength = length + 5; // Include Signature, Length, OpCode, Sequence
 
-                Logger.LogInformation("Extracted packet length: {PacketLength}. Count={Count}", packetLength, Count);
-
                 // Wait for the rest of the packet to arrive
-                if (Count < packetLength)
-                {
-                    Logger.LogInformation("Partial packet received. Waiting for more data. Needed={Needed}, Available={Available}",
-                        packetLength - Count, Count);
-                    break;
-                }
+                if (Count < packetLength) break;
 
                 try
                 {
                     // Extract and process the complete packet
                     var packetSpan = memorySlice.Span.Slice(offset, packetLength);
-                    Logger.LogInformation("Processing packet: {PacketHex}", BitConverter.ToString(packetSpan.ToArray()));
                     await HandlePacketAsync(packetSpan).ConfigureAwait(false);
                 }
-                catch (Exception ex)
+                catch
                 {
-                    Logger.LogError(ex, "Error processing packet at offset {Offset}. Resetting Count.", offset);
                     Count = 0; // Reset count if there's a processing error
                     break;
                 }
 
                 Count -= packetLength;
                 offset += packetLength;
-
-                Logger.LogInformation("Processed packet. Remaining Count={Count}, NextOffset={Offset}", Count, offset);
             }
 
             if (Count > 0)
             {
                 // Move remaining data to the start of the buffer
                 memorySlice.Slice(offset, Count).CopyTo(Memory);
-                Logger.LogInformation("Moved remaining data. New Count={Count}", Count);
             }
         }
         catch (Exception ex)
@@ -333,27 +287,5 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
     public virtual void Close() => Socket.Close();
 
-    #endregion
-
-    #region Utility
-    private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e) => SocketArgsQueue.Enqueue(e);
-
-    private SocketAsyncEventArgs CreateArgs()
-    {
-        var args = new SocketAsyncEventArgs();
-        args.Completed += ReuseSocketAsyncEventArgs;
-
-        return args;
-    }
-
-    private SocketAsyncEventArgs DequeueArgs(Memory<byte> buffer)
-    {
-        if (!SocketArgsQueue.TryDequeue(out var args))
-            args = CreateArgs();
-
-        args.SetBuffer(buffer);
-
-        return args;
-    }
     #endregion
 }
