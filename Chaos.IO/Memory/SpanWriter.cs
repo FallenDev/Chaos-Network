@@ -1,451 +1,235 @@
-using System.Buffers.Binary;
-using System.Runtime.InteropServices;
+using System.Numerics;
 using System.Text;
-using Chaos.IO.Definitions;
 
 namespace Chaos.IO.Memory;
 
 /// <summary>
-///     A ref struct for writing primitive types, strings, and other data to a <see cref="Span{T}" /> with support for
-///     endianness and growing.
+/// A ref struct for writing primitive types, strings, and other data to a <see cref="Span{T}" />.
 /// </summary>
 public ref struct SpanWriter
 {
-    private readonly bool AutoGrow;
-    private readonly bool IsLittleEndian;
-    private Span<byte> Buffer;
+    private readonly Span<byte> Buffer;
+    private int Position;
 
     /// <summary>
-    ///     Gets or sets the current position within the Span.
+    /// Initializes a new instance of the <see cref="SpanWriter" /> struct.
     /// </summary>
-    public int Position { get; set; }
-
-    /// <summary>
-    ///     Gets the Encoding used for writing strings.
-    /// </summary>
-    public Encoding Encoding { get; }
-
-    /// <summary>
-    ///     Gets the Endianness used for writing numbers.
-    /// </summary>
-    public Endianness Endianness { get; }
-
-    /// <summary>
-    ///     Gets a value indicating whether the current position is at the end of the Span.
-    /// </summary>
-    public readonly bool EndOfSpan => Position >= Buffer.Length;
-
-    /// <summary>
-    ///     Gets the number of bytes remaining in the Span from the current position.
-    /// </summary>
-    public readonly int Remaining => Buffer.Length - Position;
-
-    /// <summary>
-    ///     Initializes a new instance of the <see cref="SpanWriter" /> struct with the specified encoding and buffer.
-    /// </summary>
-    /// <param name="encoding">
-    ///     The encoding used for writing strings.
-    /// </param>
-    /// <param name="buffer">
-    ///     A reference to the buffer.
-    /// </param>
-    /// <param name="endianness">
-    ///     The endianness used for writing numbers.
-    /// </param>
-    public SpanWriter(Encoding encoding, ref Span<byte> buffer, Endianness endianness = Endianness.BigEndian)
+    /// <param name="buffer">The span of bytes to write to.</param>
+    public SpanWriter(Span<byte> buffer)
     {
         Buffer = buffer;
-        Encoding = encoding;
         Position = 0;
-        AutoGrow = false;
-        Endianness = endianness;
-        IsLittleEndian = Endianness == Endianness.LittleEndian;
     }
 
     /// <summary>
-    ///     Initializes a new instance of the <see cref="SpanWriter" /> struct with the specified encoding, initial buffer
-    ///     size, and endianness.
+    /// Writes a boolean value to the buffer.
     /// </summary>
-    /// <param name="encoding">
-    ///     The encoding used for writing strings.
-    /// </param>
-    /// <param name="initialBufferSize">
-    ///     The initial size of the buffer.
-    /// </param>
-    /// <param name="autoGrow">
-    ///     A flag indicating whether the buffer should automatically grow when needed.
-    /// </param>
-    /// <param name="endianness">
-    ///     The endianness used for writing numbers.
-    /// </param>
-    public SpanWriter(
-        Encoding encoding,
-        int initialBufferSize = 50,
-        bool autoGrow = true,
-        Endianness endianness = Endianness.BigEndian)
+    public void WriteBoolean(bool value) => WriteByte(value ? (byte)1 : (byte)0);
+
+    // Write Unsigned Numeric Types
+    public void WriteUInt16(ushort value)
     {
-        Buffer = new Span<byte>(new byte[initialBufferSize]);
-        Encoding = encoding;
-        Position = 0;
-        AutoGrow = autoGrow;
-        Endianness = endianness;
-        IsLittleEndian = Endianness == Endianness.LittleEndian;
+        Buffer[Position++] = (byte)(value >> 8);
+        Buffer[Position++] = (byte)(value & 0xFF);
     }
 
-    /// <summary>
-    ///     Trims the buffer to the current position.
-    /// </summary>
-    public void Flush() => Buffer = Buffer[..Position];
-
-    private void GrowIfNeeded(int bytesToWrite)
+    public void WriteUInt32(uint value)
     {
-        if (Remaining >= bytesToWrite)
-            return;
-
-        if (!AutoGrow)
-            throw new EndOfStreamException();
-
-        var buffer = Buffer;
-
-        //create a new buffer of length * 3 OR (length + bytesToWrite) * 1.5 (whichever is bigger)
-        var newLength = (int)Math.Max(buffer.Length * 3, (buffer.Length + bytesToWrite) * 1.5);
-        var newBuffer = new byte[newLength];
-        Buffer = new Span<byte>(newBuffer);
-        buffer.CopyTo(Buffer);
+        Buffer[Position++] = (byte)(value >> 24);
+        Buffer[Position++] = (byte)((value >> 16) & 0xFF);
+        Buffer[Position++] = (byte)((value >> 8) & 0xFF);
+        Buffer[Position++] = (byte)(value & 0xFF);
     }
 
-    private void InnerWriteString(ReadOnlySpan<byte> buffer, bool lineFeed = false, bool terminate = false)
+    public void WriteUInt64(ulong value)
     {
-        GrowIfNeeded(buffer.Length);
-
-        buffer.CopyTo(Buffer[Position..]);
-        Position += buffer.Length;
-
-        if (lineFeed)
-            WriteByte(10); // LF
-        else if (terminate)
-            WriteByte(0); // \0
-    }
-
-    /// <summary>
-    ///     Returns a trimmed span of the underlying buffer.
-    /// </summary>
-    /// <returns>
-    ///     The trimmed span of the underlying buffer.
-    /// </returns>
-    public Span<byte> ToSpan()
-    {
-        if (Buffer.Length != Position)
-            Flush();
-
-        return Buffer;
-    }
-
-    /// <summary>
-    ///     Writes a value of a numeric type to the buffer.
-    /// </summary>
-    /// <typeparam name="T">
-    ///     The numeric type of the value to write.
-    /// </typeparam>
-    /// <param name="value">
-    ///     The value to write.
-    /// </param>
-    public void WriteValue<T>(T value) where T: unmanaged
-    {
-        switch (value)
+        for (var i = 7; i >= 0; i--)
         {
-            case byte @byte:
-                WriteByte(@byte);
-
-                break;
-            case sbyte @sbyte:
-                WriteSByte(@sbyte);
-
-                break;
-            case ushort @ushort:
-                WriteUInt16(@ushort);
-
-                break;
-            case short @short:
-                WriteInt16(@short);
-
-                break;
-            case uint @uint:
-                WriteUInt32(@uint);
-
-                break;
-            case int @int:
-                WriteInt32(@int);
-
-                break;
-            case bool @bool:
-                WriteBoolean(@bool);
-
-                break;
-            case ValueTuple<byte, byte> vTuple8:
-                WritePoint8(vTuple8.Item1, vTuple8.Item2);
-
-                break;
-            case ValueTuple<ushort, ushort> vTuple16:
-                WritePoint16(vTuple16.Item1, vTuple16.Item2);
-
-                break;
+            Buffer[Position++] = (byte)(value >> (i * 8));
         }
     }
 
-    /// <summary>
-    ///     Writes a boolean value to the buffer.
-    /// </summary>
-    /// <param name="value">
-    ///     The boolean value to write.
-    /// </param>
-    public void WriteBoolean(bool value)
+    // Write Signed Numeric Types
+    public void WriteInt16(short value) => WriteUInt16((ushort)value);
+
+    public void WriteInt32(int value) => WriteUInt32((uint)value);
+
+    public void WriteInt64(long value) => WriteUInt64((ulong)value);
+
+    // Write Floating Point Types
+    public void WriteFloat(float value) => WriteInt32(BitConverter.SingleToInt32Bits(value));
+
+    public void WriteDouble(double value) => WriteInt64(BitConverter.DoubleToInt64Bits(value));
+
+    // Write Vectors
+    public void WriteVector2(Vector2 value)
     {
-        GrowIfNeeded(sizeof(bool));
-
-        MemoryMarshal.Write(Buffer[Position..], in value);
-
-        Position++;
+        WriteFloat(value.X);
+        WriteFloat(value.Y);
     }
 
-    /// <summary>
-    ///     Writes a byte value to the buffer.
-    /// </summary>
-    /// <param name="value">
-    ///     The byte value to write.
-    /// </param>
-    public void WriteByte(byte value)
+    public void WriteVector3(Vector3 value)
     {
-        GrowIfNeeded(sizeof(byte));
-        MemoryMarshal.Write(Buffer[Position..], in value);
-        Position++;
+        WriteFloat(value.X);
+        WriteFloat(value.Y);
+        WriteFloat(value.Z);
     }
 
-    /// <summary>
-    ///     Writes an array of bytes to the buffer.
-    /// </summary>
-    /// <param name="buffer">
-    ///     The byte array to write.
-    /// </param>
-    public void WriteBytes(params ReadOnlySpan<byte> buffer)
-    {
-        GrowIfNeeded(buffer.Length);
-
-        buffer.CopyTo(Buffer[Position..]);
-        Position += buffer.Length;
-    }
-
-    /// <summary>
-    ///     Writes a byte array to the buffer with an optional line feed.
-    /// </summary>
-    /// <param name="buffer">
-    ///     The byte array to write.
-    /// </param>
-    /// <param name="lineFeed">
-    ///     A flag indicating whether to append a line feed after the byte array.
-    /// </param>
-    public void WriteData(byte[] buffer, bool lineFeed = false)
-    {
-        WriteBytes(buffer);
-
-        if (lineFeed)
-            WriteByte(10);
-    }
-
-    /// <summary>
-    ///     Writes a byte array with a prepended 16-bit length to the buffer.
-    /// </summary>
-    /// <param name="buffer">
-    ///     The byte array to write.
-    /// </param>
-    public void WriteData16(byte[] buffer)
-    {
-        if (buffer.Length > ushort.MaxValue)
-            buffer = buffer[..ushort.MaxValue];
-
-        WriteUInt16((ushort)buffer.Length);
-        WriteData(buffer);
-    }
-
-    /// <summary>
-    ///     Writes a byte array with a prepended 8-bit length to the buffer.
-    /// </summary>
-    /// <param name="buffer">
-    ///     The byte array to write.
-    /// </param>
-    public void WriteData8(byte[] buffer)
-    {
-        if (buffer.Length > byte.MaxValue)
-            buffer = buffer[..byte.MaxValue];
-
-        WriteByte((byte)buffer.Length);
-        WriteData(buffer);
-    }
-
-    /// <summary>
-    ///     Writes a 16-bit signed integer value to the buffer.
-    /// </summary>
-    /// <param name="value">
-    ///     The 16-bit signed integer value to write.
-    /// </param>
-    public void WriteInt16(short value)
-    {
-        GrowIfNeeded(sizeof(short));
-
-        if (!IsLittleEndian && BitConverter.IsLittleEndian)
-            value = BinaryPrimitives.ReverseEndianness(value);
-
-        MemoryMarshal.Write(Buffer[Position..], in value);
-        Position += sizeof(short);
-    }
-
-    /// <summary>
-    ///     Writes a 32-bit signed integer value to the buffer.
-    /// </summary>
-    /// <param name="value">
-    ///     The 32-bit signed integer value to write.
-    /// </param>
-    public void WriteInt32(int value)
-    {
-        GrowIfNeeded(sizeof(int));
-
-        if (!IsLittleEndian && BitConverter.IsLittleEndian)
-            value = BinaryPrimitives.ReverseEndianness(value);
-
-        MemoryMarshal.Write(Buffer[Position..], in value);
-        Position += sizeof(int);
-    }
-
-    /// <summary>
-    ///     Writes two 16-bit unsigned integers as a point to the buffer.
-    /// </summary>
-    /// <param name="x">
-    ///     The x-coordinate of the point.
-    /// </param>
-    /// <param name="y">
-    ///     The y-coordinate of the point.
-    /// </param>
-    public void WritePoint16(ushort x, ushort y)
-    {
-        WriteUInt16(x);
-        WriteUInt16(y);
-    }
-
-    /// <summary>
-    ///     Writes two 8-bit unsigned integers as a point to the buffer.
-    /// </summary>
-    /// <param name="x">
-    ///     The x-coordinate of the point.
-    /// </param>
-    /// <param name="y">
-    ///     The y-coordinate of the point.
-    /// </param>
+    // Write Points
     public void WritePoint8(byte x, byte y)
     {
         WriteByte(x);
         WriteByte(y);
     }
 
-    /// <summary>
-    ///     Writes an 8-bit signed byte value to the buffer.
-    /// </summary>
-    /// <param name="value">
-    ///     The 8-bit signed integer value to write.
-    /// </param>
-    public void WriteSByte(sbyte value)
+    public void WritePoint16(short x, short y)
     {
-        GrowIfNeeded(sizeof(sbyte));
-
-        MemoryMarshal.Write(Buffer[Position..], in value);
-
-        Position++;
+        WriteInt16(x);
+        WriteInt16(y);
     }
 
-    /// <summary>
-    ///     Writes a string to the buffer with optional line feed or null termination.
-    /// </summary>
-    /// <param name="value">
-    ///     The string to write.
-    /// </param>
-    /// <param name="lineFeed">
-    ///     A flag indicating whether to append a line feed after the string.
-    /// </param>
-    /// <param name="terminate">
-    ///     A flag indicating whether to append a null terminator after the string.
-    /// </param>
-    public void WriteString(string value, bool lineFeed = false, bool terminate = false)
+    public void WritePoint16(ushort x, ushort y)
     {
-        var buffer = Encoding.GetBytes(value);
-        InnerWriteString(buffer, lineFeed, terminate);
+        WriteUInt16(x);
+        WriteUInt16(y);
     }
 
-    /// <summary>
-    ///     Writes a string with a prepended 16-bit length to the buffer.
-    /// </summary>
-    /// <param name="value">
-    ///     The string to write.
-    /// </param>
-    public void WriteString16(string value)
+    public void WritePoint32(int x, int y)
     {
-        var buffer = Encoding.GetBytes(value)
-                             .AsSpan();
-
-        if (buffer.Length > ushort.MaxValue)
-            buffer = buffer[..ushort.MaxValue];
-
-        WriteUInt16((ushort)buffer.Length);
-        InnerWriteString(buffer);
+        WriteInt32(x);
+        WriteInt32(y);
     }
 
-    /// <summary>
-    ///     Writes a string with a prepended 8-bit length to the buffer.
-    /// </summary>
-    /// <param name="value">
-    ///     The string to write.
-    /// </param>
+    public void WritePoint32(uint x, uint y)
+    {
+        WriteUInt32(x);
+        WriteUInt32(y);
+    }
+
+    public void WritePoint64(long x, long y)
+    {
+        WriteInt64(x);
+        WriteInt64(y);
+    }
+
+    public void WritePoint64(ulong x, ulong y)
+    {
+        WriteUInt64(x);
+        WriteUInt64(y);
+    }
+
+    // Write String with Dynamic Length Prefix
+    public void WriteString(string value)
+    {
+        var bytes = Encoding.ASCII.GetBytes(value);
+        if (bytes.Length <= byte.MaxValue)
+        {
+            WriteString8(value);
+        }
+        else
+        {
+            WriteString16(value);
+        }
+    }
+
+    // Write String with 8-bit Length Prefix
     public void WriteString8(string value)
     {
-        var buffer = Encoding.GetBytes(value)
-                             .AsSpan();
+        var bytes = Encoding.ASCII.GetBytes(value);
+        if (bytes.Length > byte.MaxValue)
+            throw new ArgumentException("String is too long for 8-bit length prefix.");
 
-        if (buffer.Length > byte.MaxValue)
-            buffer = buffer[..byte.MaxValue];
-
-        WriteByte((byte)buffer.Length);
-        InnerWriteString(buffer);
+        WriteByte((byte)bytes.Length);
+        WriteBytes(bytes);
     }
+
+    // Write String with 16-bit Length Prefix
+    public void WriteString16(string value)
+    {
+        var bytes = Encoding.ASCII.GetBytes(value);
+        if (bytes.Length > ushort.MaxValue)
+            throw new ArgumentException("String is too long for 16-bit length prefix.");
+
+        WriteUInt16((ushort)bytes.Length);
+        WriteBytes(bytes);
+    }
+
+    // Write Bytes
+    public void WriteBytes(ReadOnlySpan<byte> bytes)
+    {
+        bytes.CopyTo(Buffer[Position..]);
+        Position += bytes.Length;
+    }
+
+    public void WriteBytes(params byte[] bytes)
+    {
+        foreach (var b in bytes)
+        {
+            WriteByte(b);
+        }
+    }
+
+    // Write Raw Data
+    public void WriteData16(ReadOnlySpan<byte> data)
+    {
+        if (data.Length > ushort.MaxValue)
+            throw new ArgumentException("Data too large for a 16-bit length prefix.");
+
+        WriteUInt16((ushort)data.Length);
+        WriteBytes(data);
+    }
+
+    public void WriteData8(ReadOnlySpan<byte> data)
+    {
+        if (data.Length > byte.MaxValue)
+            throw new ArgumentException("Data too large for an 8-bit length prefix.");
+
+        WriteByte((byte)data.Length);
+        WriteBytes(data);
+    }
+
+    public void WriteData(ReadOnlySpan<byte> data)
+    {
+        if (data.Length <= byte.MaxValue)
+        {
+            WriteData8(data);
+        }
+        else if (data.Length <= ushort.MaxValue)
+        {
+            WriteData16(data);
+        }
+        else
+        {
+            throw new ArgumentException("Data too large to serialize dynamically.");
+        }
+    }
+
+    // Write Arguments
+    public void WriteArgs8(List<string> args)
+    {
+        foreach (var arg in args)
+        {
+            WriteString8(arg);
+        }
+    }
+
+    public void WriteArgs(List<string> args)
+    {
+        foreach (var arg in args)
+        {
+            WriteString(arg);
+        }
+    }
+
+    // Write Single Byte
+    public void WriteByte(byte value) => Buffer[Position++] = value;
+
+    // Write Signed Byte
+    public void WriteSByte(sbyte value) => Buffer[Position++] = (byte)value;
 
     /// <summary>
-    ///     Writes a 16-bit unsigned integer value to the buffer.
+    /// Trims the buffer to the written content and returns it as a span.
     /// </summary>
-    /// <param name="value">
-    ///     The 16-bit unsigned integer value to write.
-    /// </param>
-    public void WriteUInt16(ushort value)
-    {
-        GrowIfNeeded(sizeof(ushort));
-
-        if (!IsLittleEndian && BitConverter.IsLittleEndian)
-            value = BinaryPrimitives.ReverseEndianness(value);
-
-        MemoryMarshal.Write(Buffer[Position..], in value);
-        Position += sizeof(ushort);
-    }
-
-    /// <summary>
-    ///     Writes a 32-bit unsigned integer value to the buffer.
-    /// </summary>
-    /// <param name="value">
-    ///     The 32-bit unsigned integer value to write.
-    /// </param>
-    public void WriteUInt32(uint value)
-    {
-        GrowIfNeeded(sizeof(uint));
-
-        if (!IsLittleEndian && BitConverter.IsLittleEndian)
-            value = BinaryPrimitives.ReverseEndianness(value);
-
-        MemoryMarshal.Write(Buffer[Position..], in value);
-        Position += sizeof(uint);
-    }
+    /// <returns>A span containing the written content.</returns>
+    public Span<byte> ToSpan() => Buffer[..Position];
 }

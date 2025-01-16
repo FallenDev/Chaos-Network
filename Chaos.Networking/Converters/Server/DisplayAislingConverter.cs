@@ -25,8 +25,8 @@ public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAisling
 
         var args = new DisplayAislingArgs
         {
-            X = point.X,
-            Y = point.Y,
+            X = point.x,
+            Y = point.y,
             Direction = (Direction)direction,
             Id = id
         };

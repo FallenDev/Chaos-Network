@@ -22,7 +22,7 @@ public sealed class SpellUseConverter : PacketConverterBase<SpellUseArgs>
         return new SpellUseArgs
         {
             SourceSlot = sourceSlot,
-            ArgsData = argsData
+            ArgsData = argsData.ToArray()
         };
     }
 

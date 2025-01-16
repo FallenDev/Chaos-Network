@@ -94,7 +94,7 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
         var portraitData = reader.ReadData16();
         var profileText = reader.ReadString16();
 
-        args.Portrait = portraitData;
+        args.Portrait = portraitData.ToArray();
         args.ProfileText = profileText;
 
         return args;

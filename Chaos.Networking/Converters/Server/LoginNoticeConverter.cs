@@ -27,7 +27,7 @@ public sealed class LoginNoticeConverter : PacketConverterBase<LoginNoticeArgs>
         {
             var data = reader.ReadData16();
 
-            args.Data = data;
+            args.Data = data.ToArray();
         } else
         {
             var checkSum = reader.ReadUInt32();

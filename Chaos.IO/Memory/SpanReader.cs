@@ -1,293 +1,163 @@
-using System.Buffers.Binary;
-using System.Runtime.InteropServices;
+using System.Numerics;
 using System.Text;
-using Chaos.IO.Definitions;
 
-namespace Chaos.IO.Memory;
-
-/// <summary>
-///     A ref struct for reading data from a span of bytes with customizable endianness and encoding.
-/// </summary>
-public ref struct SpanReader
+namespace Chaos.IO.Memory
 {
-    private readonly Span<byte> Buffer;
-    private readonly bool IsLittleEndian;
-
-    /// <summary>
-    ///     Gets the current position in the Span.
-    /// </summary>
-    public int Position { get; set; }
-
-    /// <summary>
-    ///     Gets the Encoding used for string operations.
-    /// </summary>
-    public Encoding Encoding { get; }
-
-    /// <summary>
-    ///     Gets the endianness of the data.
-    /// </summary>
-    public Endianness Endianness { get; }
-
-    /// <summary>
-    ///     Gets a value indicating whether the reader reached the end of the Span.
-    /// </summary>
-    public readonly bool EndOfSpan => Position >= Buffer.Length;
-
-    /// <summary>
-    ///     Gets the number of remaining bytes in the Span.
-    /// </summary>
-    public readonly int Remaining => Buffer.Length - Position;
-
-    /// <summary>
-    ///     Initializes a new instance of the <see cref="SpanReader" /> struct.
-    /// </summary>
-    /// <param name="encoding">
-    ///     The encoding to use for string operations.
-    /// </param>
-    /// <param name="buffer">
-    ///     The span of bytes to read from.
-    /// </param>
-    /// <param name="endianness">
-    ///     The endianness of the data (default is BigEndian).
-    /// </param>
-    public SpanReader(Encoding encoding, in Span<byte> buffer, Endianness endianness = Endianness.BigEndian)
+    public ref struct SpanReader
     {
-        Buffer = buffer;
-        Encoding = encoding;
-        Position = 0;
-        Endianness = endianness;
-        IsLittleEndian = Endianness == Endianness.LittleEndian;
-    }
+        private ReadOnlySpan<byte> Buffer;
+        private int Position;
 
-    /// <summary>
-    ///     Reads a list of strings separated by null terminators from the current position in the Span.
-    /// </summary>
-    public List<string> ReadArgs()
-    {
-        var args = new List<string>();
+        public SpanReader(ReadOnlySpan<byte> buffer)
+        {
+            Buffer = buffer;
+            Position = 0;
+        }
 
-        while (!EndOfSpan)
-            args.Add(ReadString());
+        // Read Boolean
+        public bool ReadBoolean() => ReadByte() != 0;
 
-        return args;
-    }
+        // Read Unsigned Numeric Types
+        public ushort ReadUInt16() => (ushort)((ReadByte() << 8) | ReadByte());
 
-    /// <summary>
-    ///     Reads a list of strings with 8-bit length prefixes from the current position in the Span.
-    /// </summary>
-    public List<string> ReadArgs8()
-    {
-        var args = new List<string>();
+        public uint ReadUInt32() =>
+            (uint)((ReadByte() << 24) | (ReadByte() << 16) | (ReadByte() << 8) | ReadByte());
 
-        while (!EndOfSpan)
-            args.Add(ReadString8());
-
-        return args;
-    }
-
-    /// <summary>
-    ///     Reads a boolean value from the current position in the Span.
-    /// </summary>
-    public bool ReadBoolean()
-    {
-        var ret = MemoryMarshal.Read<bool>(Buffer[Position..]);
-        Position++;
-
-        return ret;
-    }
-
-    /// <summary>
-    ///     Reads a byte from the current position in the Span.
-    /// </summary>
-    public byte ReadByte()
-    {
-        var ret = MemoryMarshal.Read<byte>(Buffer[Position..]);
-        Position++;
-
-        return ret;
-    }
-
-    /// <summary>
-    ///     Reads the specified number of bytes from the current position in the Span.
-    /// </summary>
-    public byte[] ReadBytes(int length)
-    {
-        if (Remaining < length)
-            throw new EndOfStreamException();
-
-        var start = Position;
-        var end = Position += length;
-
-        return Buffer[start..end]
-            .ToArray();
-    }
-
-    /// <summary>
-    ///     Reads all remaining bytes from the current position in the Span.
-    /// </summary>
-    public byte[] ReadData() => ReadBytes(Remaining);
-
-    /// <summary>
-    ///     Reads a byte array with a 16-bit length prefix from the current position in the Span.
-    /// </summary>
-    public byte[] ReadData16()
-    {
-        int lengthPrefix = ReadUInt16();
-
-        return ReadBytes(lengthPrefix);
-    }
-
-    /// <summary>
-    ///     Reads a byte array with an 8-bit length prefix from the current position in the Span.
-    /// </summary>
-    public byte[] ReadData8()
-    {
-        int lengthPrefix = ReadByte();
-
-        return ReadBytes(lengthPrefix);
-    }
-
-    /// <summary>
-    ///     Reads a 16-bit signed integer from the current position in the Span.
-    /// </summary>
-    public short ReadInt16()
-    {
-        var ret = MemoryMarshal.Read<short>(Buffer[Position..]);
-
-        if (!IsLittleEndian && BitConverter.IsLittleEndian)
-            ret = BinaryPrimitives.ReverseEndianness(ret);
-
-        Position += sizeof(short);
-
-        return ret;
-    }
-
-    /// <summary>
-    ///     Reads a 32-bit signed integer from the current position in the Span.
-    /// </summary>
-    public int ReadInt32()
-    {
-        var ret = MemoryMarshal.Read<int>(Buffer[Position..]);
-
-        if (!IsLittleEndian && BitConverter.IsLittleEndian)
-            ret = BinaryPrimitives.ReverseEndianness(ret);
-
-        Position += sizeof(int);
-
-        return ret;
-    }
-
-    /// <summary>
-    ///     Reads a tuple of two 16-bit unsigned integers from the current position in the Span.
-    /// </summary>
-    public (ushort X, ushort Y) ReadPoint16() => (ReadUInt16(), ReadUInt16());
-
-    /// <summary>
-    ///     Reads a tuple of two 8-bit unsigned integers from the current position in the Span.
-    /// </summary>
-    public (byte X, byte Y) ReadPoint8() => (ReadByte(), ReadByte());
-
-    /// <summary>
-    ///     Reads an 8-bit signed byte from the current position in the Span.
-    /// </summary>
-    public sbyte ReadSByte()
-    {
-        var ret = MemoryMarshal.Read<sbyte>(Buffer[Position..]);
-        Position++;
-
-        return ret;
-    }
-
-    /// <summary>
-    ///     Reads a string separated ending with a null terminator from the current position in the Span, or the rest of the
-    ///     Span if no null terminator is found.
-    /// </summary>
-    public string ReadString()
-    {
-        var index = -1;
-
-        for (var i = Position; i < Buffer.Length; i++)
-            if ((Buffer[i] == 10) || (Buffer[i] == 0))
+        public ulong ReadUInt64()
+        {
+            ulong value = 0;
+            for (var i = 0; i < 8; i++)
             {
-                index = i;
-
-                break;
+                value = (value << 8) | ReadByte();
             }
+            return value;
+        }
 
-        var length = index - Position;
+        // Read Signed Numeric Types
+        public short ReadInt16() => (short)ReadUInt16();
 
-        //if no terminators were found, just read the rest of the buffer as a string
-        if (length < 0)
-            length = Buffer.Length - Position;
+        public int ReadInt32() => (int)ReadUInt32();
 
-        var ret = Encoding.GetString(Buffer.Slice(Position, length));
-        Position += length;
+        public long ReadInt64() => (long)ReadUInt64();
 
-        if (Position != Buffer.Length)
-            Position++;
+        // Read Floating Point Types
+        public float ReadFloat() => BitConverter.Int32BitsToSingle(ReadInt32());
 
-        return ret;
-    }
+        public double ReadDouble() => BitConverter.Int64BitsToDouble(ReadInt64());
 
-    /// <summary>
-    ///     Reads a string with a 16-bit length prefix from the current position in the Span.
-    /// </summary>
-    public string ReadString16()
-    {
-        int length = ReadUInt16();
+        // Read Vectors
+        public Vector2 ReadVector2() => new(ReadFloat(), ReadFloat());
 
-        if (Remaining < length)
-            throw new EndOfStreamException();
+        public Vector3 ReadVector3() => new(ReadFloat(), ReadFloat(), ReadFloat());
 
-        var ret = Encoding.GetString(Buffer.Slice(Position, length));
-        Position += length;
+        // Read Points
+        public (byte x, byte y) ReadPoint8() => (ReadByte(), ReadByte());
 
-        return ret;
-    }
+        public (short x, short y) ReadPoint16() => (ReadInt16(), ReadInt16());
 
-    /// <summary>
-    ///     Reads a string with an 8-bit length prefix from the current position in the Span.
-    /// </summary>
-    public string ReadString8()
-    {
-        int length = ReadByte();
+        public (ushort x, ushort y) ReadPoint16U() => (ReadUInt16(), ReadUInt16());
 
-        if (Remaining < length)
-            throw new EndOfStreamException();
+        public (int x, int y) ReadPoint32() => (ReadInt32(), ReadInt32());
 
-        var ret = Encoding.GetString(Buffer.Slice(Position, length));
-        Position += length;
+        public (uint x, uint y) ReadPoint32U() => (ReadUInt32(), ReadUInt32());
 
-        return ret;
-    }
+        public (long x, long y) ReadPoint64() => (ReadInt64(), ReadInt64());
 
-    /// <summary>
-    ///     Reads a 16-bit unsigned integer from the current position in the Span.
-    /// </summary>
-    public ushort ReadUInt16()
-    {
-        var ret = MemoryMarshal.Read<ushort>(Buffer[Position..]);
+        public (ulong x, ulong y) ReadPoint64U() => (ReadUInt64(), ReadUInt64());
 
-        if (!IsLittleEndian && BitConverter.IsLittleEndian)
-            ret = BinaryPrimitives.ReverseEndianness(ret);
+        // Read String
+        public string ReadString(bool is16BitLength = false) => is16BitLength ? ReadString16() : ReadString8();
 
-        Position += sizeof(ushort);
+        public string ReadString8()
+        {
+            var length = ReadByte();
+            return ReadString(length);
+        }
 
-        return ret;
-    }
+        public string ReadString16()
+        {
+            var length = ReadUInt16();
+            return ReadString(length);
+        }
 
-    /// <summary>
-    ///     Reads a 32-bit unsigned integer from the current position in the Span.
-    /// </summary>
-    public uint ReadUInt32()
-    {
-        var ret = MemoryMarshal.Read<uint>(Buffer[Position..]);
+        private string ReadString(int length)
+        {
+            if (Position + length > Buffer.Length)
+                throw new IndexOutOfRangeException("String length exceeds available buffer.");
 
-        if (!IsLittleEndian && BitConverter.IsLittleEndian)
-            ret = BinaryPrimitives.ReverseEndianness(ret);
+            var result = Encoding.ASCII.GetString(Buffer.Slice(Position, length));
+            Position += length;
+            return result;
+        }
 
-        Position += sizeof(uint);
+        // Read Data
+        public ReadOnlySpan<byte> ReadData() => ReadBytesAsSpan(Remaining);
 
-        return ret;
+        public ReadOnlySpan<byte> ReadData8()
+        {
+            var length = ReadByte();
+            return ReadBytesAsSpan(length);
+        }
+
+        public ReadOnlySpan<byte> ReadData16()
+        {
+            var length = ReadUInt16();
+            return ReadBytesAsSpan(length);
+        }
+
+        // Read Bytes
+        public ReadOnlySpan<byte> ReadBytesAsSpan(int length)
+        {
+            if (Position + length > Buffer.Length)
+                throw new IndexOutOfRangeException("Requested length exceeds available buffer.");
+
+            var result = Buffer.Slice(Position, length);
+            Position += length;
+            return result;
+        }
+
+        public byte[] ReadBytes(int length) => ReadBytesAsSpan(length).ToArray();
+
+        // Read Arguments
+        public List<string> ReadArgs()
+        {
+            var args = new List<string>();
+
+            while (Position < Buffer.Length)
+                args.Add(ReadString());
+
+            return args;
+        }
+
+        public List<string> ReadArgs8()
+        {
+            var args = new List<string>();
+
+            while (Position < Buffer.Length)
+                args.Add(ReadString8());
+
+            return args;
+        }
+
+        // Read Single Byte
+        public byte ReadByte() => Buffer[Position++];
+
+        // Read Signed Byte
+        public sbyte ReadSByte() => (sbyte)Buffer[Position++];
+
+        public ReadOnlySpan<byte> ToSpan()
+        {
+            if (Position > Buffer.Length)
+                throw new IndexOutOfRangeException("Position exceeds buffer length.");
+
+            return Buffer[Position..];
+        }
+
+        public int Remaining => Buffer.Length - Position;
+
+        /// <summary>
+        /// Gets a value indicating whether the writer has reached or exceeded the end of the span.
+        /// </summary>
+        public bool EndOfSpan => Position >= Buffer.Length;
     }
 }

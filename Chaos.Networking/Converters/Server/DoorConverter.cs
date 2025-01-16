@@ -28,8 +28,8 @@ public sealed class DoorConverter : PacketConverterBase<DoorArgs>
             doors.Add(
                 new DoorInfo
                 {
-                    X = point.X,
-                    Y = point.Y,
+                    X = point.x,
+                    Y = point.y,
                     Closed = closed,
                     OpenRight = openRight
                 });

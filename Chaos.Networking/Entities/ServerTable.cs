@@ -28,7 +28,7 @@ public sealed class ServerTable : IServerTable
     {
         Servers = servers.ToDictionary(info => info.Id);
 
-        var spanWriter = new SpanWriter(Encoding.GetEncoding(949));
+        var spanWriter = new SpanWriter();
 
         spanWriter.WriteByte((byte)Servers.Count);
 
@@ -37,16 +37,12 @@ public sealed class ServerTable : IServerTable
             spanWriter.WriteByte(server.Id);
             spanWriter.WriteData(server.Address.GetAddressBytes());
             spanWriter.WriteUInt16((ushort)server.Port);
-            spanWriter.WriteString($"{server.Name};{server.Description}", terminate: true);
+            spanWriter.WriteString($"{server.Name};{server.Description}");
         }
 
         spanWriter.WriteByte(0);
 
         var data = spanWriter.ToSpan();
-
-        CheckSum = Crc.Generate32(data);
-        Zlib.Compress(ref data);
-
         Data = data.ToArray();
     }
 }

@@ -28,7 +28,6 @@ public class AcceptConnectionConverter : PacketConverterBase<AcceptConnectionArg
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, AcceptConnectionArgs args)
     {
-        writer.WriteByte(27);
-        writer.WriteString(args.Message, true);
+        writer.WriteString(args.Message);
     }
 }

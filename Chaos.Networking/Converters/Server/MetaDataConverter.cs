@@ -34,7 +34,7 @@ public sealed class MetaDataConverter : PacketConverterBase<MetaDataArgs>
                     {
                         Name = name,
                         CheckSum = checkSum,
-                        Data = data
+                        Data = data.ToArray()
                     }
                 };
             }

@@ -53,8 +53,6 @@ public sealed class RedirectConverter : PacketConverterBase<RedirectArgs>
 
         var remaining = args.Key.Length;
 
-        remaining += writer.Encoding.GetBytes(args.Name)
-                           .Length;
         remaining += 7;
 
         writer.WriteByte((byte)remaining);

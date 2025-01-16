@@ -34,7 +34,7 @@ public sealed class PacketSerializer : IPacketSerializer
     public T Deserialize<T>(in Packet packet) where T : IPacketSerializable
     {
         var type = typeof(T);
-        var reader = new SpanReader(Encoding, packet.Payload);
+        var reader = new SpanReader(packet.Payload);
 
         if (!Converters.TryGetValue(type, out var converter) || converter is not IPacketConverter<T> typedConverter)
             throw new InvalidOperationException($"No converter exists for type \"{type.FullName}\"");
@@ -58,7 +58,7 @@ public sealed class PacketSerializer : IPacketSerializer
             throw new InvalidOperationException($"No converter exists for type \"{type.FullName}\"");
 
         // Create a writer to serialize the payload
-        var writer = new SpanWriter(Encoding);
+        var writer = new SpanWriter();
         converter.Serialize(ref writer, obj);
 
         // Create a packet with the serialized payload

@@ -20,8 +20,8 @@ public sealed class LocationConverter : PacketConverterBase<LocationArgs>
 
         return new LocationArgs
         {
-            X = point.X,
-            Y = point.Y
+            X = point.x,
+            Y = point.y
         };
     }
 

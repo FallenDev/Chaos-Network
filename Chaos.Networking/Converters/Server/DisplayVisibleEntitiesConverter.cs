@@ -38,8 +38,8 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
                     visibleObjects.Add(
                         new GroundItemInfo
                         {
-                            X = point.X,
-                            Y = point.Y,
+                            X = point.x,
+                            Y = point.y,
                             Id = id,
                             Sprite = (ushort)(sprite - NetworkingConstants.ItemSpriteOffset),
                             Color = (DisplayColor)color
@@ -56,8 +56,8 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
 
                     var creatureInfo = new CreatureInfo
                     {
-                        X = point.X,
-                        Y = point.Y,
+                        X = point.x,
+                        Y = point.y,
                         Id = id,
                         Sprite = (ushort)(sprite - NetworkingConstants.CreatureSpriteOffset),
                         Direction = (Direction)direction,

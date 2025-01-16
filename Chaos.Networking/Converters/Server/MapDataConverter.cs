@@ -22,7 +22,7 @@ public sealed class MapDataConverter : PacketConverterBase<MapDataArgs>
         return new MapDataArgs
         {
             CurrentYIndex = (byte)yIndex,
-            MapData = mapData
+            MapData = mapData.ToArray()
         };
     }
 

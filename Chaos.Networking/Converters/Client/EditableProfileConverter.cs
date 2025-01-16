@@ -31,7 +31,7 @@ public sealed class EditableProfileConverter : PacketConverterBase<EditableProfi
 
         return new EditableProfileArgs
         {
-            PortraitData = portraitData,
+            PortraitData = portraitData.ToArray(),
             ProfileMessage = profileMessage
         };
     }

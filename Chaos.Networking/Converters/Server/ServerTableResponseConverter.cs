@@ -20,7 +20,7 @@ public sealed class ServerTableResponseConverter : PacketConverterBase<ServerTab
 
         return new ServerTableResponseArgs
         {
-            ServerTable = serverTable
+            ServerTable = serverTable.ToArray()
         };
     }
 
