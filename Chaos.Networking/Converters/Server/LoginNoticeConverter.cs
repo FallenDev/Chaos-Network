@@ -25,7 +25,7 @@ public sealed class LoginNoticeConverter : PacketConverterBase<LoginNoticeArgs>
 
         if (isFullResponse)
         {
-            var data = reader.ReadData16();
+            var data = reader.ReadData();
 
             args.Data = data.ToArray();
         } else
@@ -44,7 +44,7 @@ public sealed class LoginNoticeConverter : PacketConverterBase<LoginNoticeArgs>
         writer.WriteBoolean(args.IsFullResponse);
 
         if (args.IsFullResponse)
-            writer.WriteData16(args.Data!);
+            writer.WriteData(args.Data!);
         else
             writer.WriteUInt32(args.CheckSum!.Value);
     }

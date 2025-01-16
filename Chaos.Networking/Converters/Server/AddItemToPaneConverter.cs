@@ -21,7 +21,7 @@ public sealed class AddItemToPaneConverter : PacketConverterBase<AddItemToPaneAr
         var slot = reader.ReadByte();
         var sprite = reader.ReadUInt16();
         var color = reader.ReadByte();
-        var name = reader.ReadString8();
+        var name = reader.ReadString();
         var count = reader.ReadUInt32();
         var stackable = reader.ReadBoolean();
         var maxDurability = reader.ReadUInt32();
@@ -49,7 +49,7 @@ public sealed class AddItemToPaneConverter : PacketConverterBase<AddItemToPaneAr
         writer.WriteByte(args.Item.Slot);
         writer.WriteUInt16((ushort)(args.Item.Sprite + NetworkingConstants.ItemSpriteOffset));
         writer.WriteByte((byte)args.Item.Color);
-        writer.WriteString8(args.Item.Name);
+        writer.WriteString(args.Item.Name);
         writer.WriteUInt32(args.Item.Count!.Value);
         writer.WriteBoolean(args.Item.Stackable);
         writer.WriteUInt32((uint)args.Item.MaxDurability);

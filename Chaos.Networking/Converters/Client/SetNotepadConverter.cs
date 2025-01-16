@@ -17,7 +17,7 @@ public sealed class SetNotepadConverter : PacketConverterBase<SetNotepadArgs>
     public override SetNotepadArgs Deserialize(ref SpanReader reader)
     {
         var slot = reader.ReadByte();
-        var message = reader.ReadString16();
+        var message = reader.ReadString();
 
         return new SetNotepadArgs
         {
@@ -30,6 +30,6 @@ public sealed class SetNotepadConverter : PacketConverterBase<SetNotepadArgs>
     public override void Serialize(ref SpanWriter writer, SetNotepadArgs args)
     {
         writer.WriteByte(args.Slot);
-        writer.WriteString16(args.Message);
+        writer.WriteString(args.Message);
     }
 }

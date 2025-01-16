@@ -18,9 +18,9 @@ public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
     public override SelfProfileArgs Deserialize(ref SpanReader reader)
     {
         var nation = reader.ReadByte();
-        var guildRank = reader.ReadString8();
-        var title = reader.ReadString8();
-        var groupString = reader.ReadString8();
+        var guildRank = reader.ReadString();
+        var title = reader.ReadString();
+        var groupString = reader.ReadString();
         var groupOpen = reader.ReadBoolean();
         var groupBox = reader.ReadBoolean();
 
@@ -28,8 +28,8 @@ public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
         var baseClass = reader.ReadByte();
         var enableMasterAbilitityMetadata = reader.ReadBoolean();
         var enableMasterQuestMetadata = reader.ReadBoolean();
-        var displayClass = reader.ReadString8();
-        var guildName = reader.ReadString8();
+        var displayClass = reader.ReadString();
+        var guildName = reader.ReadString();
         var legendMarkCount = reader.ReadByte();
         var legendMarks = new List<LegendMarkInfo>(legendMarkCount);
 
@@ -37,8 +37,8 @@ public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
         {
             var icon = reader.ReadByte();
             var color = reader.ReadByte();
-            var key = reader.ReadString8();
-            var text = reader.ReadString8();
+            var key = reader.ReadString();
+            var text = reader.ReadString();
 
             legendMarks.Add(
                 new LegendMarkInfo
@@ -70,15 +70,15 @@ public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
     public override void Serialize(ref SpanWriter writer, SelfProfileArgs args)
     {
         writer.WriteByte((byte)args.Nation);
-        writer.WriteString8(args.GuildRank ?? string.Empty);
-        writer.WriteString8(args.Title ?? string.Empty);
+        writer.WriteString(args.GuildRank ?? string.Empty);
+        writer.WriteString(args.Title ?? string.Empty);
 
         var str = args.GroupString;
 
         if (string.IsNullOrEmpty(str))
             str = !string.IsNullOrEmpty(args.SpouseName) ? $"Spouse: {args.SpouseName}" : "Adventuring alone";
 
-        writer.WriteString8(str);
+        writer.WriteString(str);
         writer.WriteBoolean(args.GroupOpen);
         writer.WriteBoolean(false); //TODO: groupbox fml
         /*
@@ -101,16 +101,16 @@ public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
         writer.WriteByte((byte)args.BaseClass);
         writer.WriteBoolean(args.EnableMasterAbilityMetaData);
         writer.WriteBoolean(args.EnableMasterQuestMetaData);
-        writer.WriteString8(classTitle);
-        writer.WriteString8(args.GuildName ?? string.Empty);
+        writer.WriteString(classTitle);
+        writer.WriteString(args.GuildName ?? string.Empty);
         writer.WriteByte((byte)Math.Min(byte.MaxValue, args.LegendMarks.Count));
 
         foreach (var mark in args.LegendMarks.Take(byte.MaxValue))
         {
             writer.WriteByte((byte)mark.Icon);
             writer.WriteByte((byte)mark.Color);
-            writer.WriteString8(mark.Key);
-            writer.WriteString8(mark.Text);
+            writer.WriteString(mark.Key);
+            writer.WriteString(mark.Text);
         }
     }
 }

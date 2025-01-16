@@ -26,9 +26,9 @@ public sealed class WorldListConverter : PacketConverterBase<WorldListArgs>
             var baseClass = reader.ReadByte();
             var color = reader.ReadByte();
             var socialStatus = reader.ReadByte();
-            var title = reader.ReadString8();
+            var title = reader.ReadString();
             var isMaster = reader.ReadBoolean();
-            var name = reader.ReadString8();
+            var name = reader.ReadString();
 
             countryList.Add(
                 new WorldListMemberInfo
@@ -60,9 +60,9 @@ public sealed class WorldListConverter : PacketConverterBase<WorldListArgs>
             writer.WriteByte((byte)user.BaseClass);
             writer.WriteByte((byte)user.Color);
             writer.WriteByte((byte)user.SocialStatus);
-            writer.WriteString8(user.Title ?? string.Empty);
+            writer.WriteString(user.Title ?? string.Empty);
             writer.WriteBoolean(user.IsMaster);
-            writer.WriteString8(user.Name);
+            writer.WriteString(user.Name);
         }
     }
 }

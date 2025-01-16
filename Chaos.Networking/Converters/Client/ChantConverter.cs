@@ -16,7 +16,7 @@ public sealed class ChantConverter : PacketConverterBase<ChantArgs>
     /// <inheritdoc />
     public override ChantArgs Deserialize(ref SpanReader reader)
     {
-        var chantMessage = reader.ReadString8();
+        var chantMessage = reader.ReadString();
 
         return new ChantArgs
         {
@@ -25,5 +25,5 @@ public sealed class ChantConverter : PacketConverterBase<ChantArgs>
     }
 
     /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, ChantArgs args) => writer.WriteString8(args.ChantMessage);
+    public override void Serialize(ref SpanWriter writer, ChantArgs args) => writer.WriteString(args.ChantMessage);
 }

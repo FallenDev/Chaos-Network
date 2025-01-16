@@ -17,8 +17,8 @@ public sealed class ClientRedirectedConverter : PacketConverterBase<ClientRedire
     public override ClientRedirectedArgs Deserialize(ref SpanReader reader)
     {
         var seed = reader.ReadByte();
-        var key = reader.ReadString8();
-        var name = reader.ReadString8();
+        var key = reader.ReadString();
+        var name = reader.ReadString();
         var id = reader.ReadUInt32();
 
         return new ClientRedirectedArgs
@@ -34,8 +34,8 @@ public sealed class ClientRedirectedConverter : PacketConverterBase<ClientRedire
     public override void Serialize(ref SpanWriter writer, ClientRedirectedArgs args)
     {
         writer.WriteByte(args.Seed);
-        writer.WriteString8(args.Key);
-        writer.WriteString8(args.Name);
+        writer.WriteString(args.Key);
+        writer.WriteString(args.Name);
         writer.WriteUInt32(args.Id);
     }
 }

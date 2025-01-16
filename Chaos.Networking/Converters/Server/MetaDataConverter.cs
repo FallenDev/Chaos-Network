@@ -23,9 +23,9 @@ public sealed class MetaDataConverter : PacketConverterBase<MetaDataArgs>
         {
             case MetaDataRequestType.DataByName:
             {
-                var name = reader.ReadString8();
+                var name = reader.ReadString();
                 var checkSum = reader.ReadUInt32();
-                var data = reader.ReadData16();
+                var data = reader.ReadData();
 
                 return new MetaDataArgs
                 {
@@ -45,7 +45,7 @@ public sealed class MetaDataConverter : PacketConverterBase<MetaDataArgs>
 
                 for (var i = 0; i < count; i++)
                 {
-                    var name = reader.ReadString8();
+                    var name = reader.ReadString();
                     var checkSum = reader.ReadUInt32();
 
                     collection.Add(
@@ -75,9 +75,9 @@ public sealed class MetaDataConverter : PacketConverterBase<MetaDataArgs>
         switch (args.MetaDataRequestType)
         {
             case MetaDataRequestType.DataByName:
-                writer.WriteString8(args.MetaDataInfo!.Name);
+                writer.WriteString(args.MetaDataInfo!.Name);
                 writer.WriteUInt32(args.MetaDataInfo!.CheckSum);
-                writer.WriteData16(args.MetaDataInfo!.Data);
+                writer.WriteData(args.MetaDataInfo!.Data);
 
                 break;
             case MetaDataRequestType.AllCheckSums:
@@ -85,7 +85,7 @@ public sealed class MetaDataConverter : PacketConverterBase<MetaDataArgs>
 
                 foreach (var info in args.MetaDataCollection!)
                 {
-                    writer.WriteString8(info.Name);
+                    writer.WriteString(info.Name);
                     writer.WriteUInt32(info.CheckSum);
                 }
 

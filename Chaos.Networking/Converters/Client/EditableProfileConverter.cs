@@ -26,8 +26,8 @@ public sealed class EditableProfileConverter : PacketConverterBase<EditableProfi
                 ProfileMessage = string.Empty
             };
 
-        var portraitData = reader.ReadData16();
-        var profileMessage = reader.ReadString16();
+        var portraitData = reader.ReadData();
+        var profileMessage = reader.ReadString();
 
         return new EditableProfileArgs
         {
@@ -40,7 +40,7 @@ public sealed class EditableProfileConverter : PacketConverterBase<EditableProfi
     public override void Serialize(ref SpanWriter writer, EditableProfileArgs args)
     {
         writer.WriteUInt16((ushort)(4 + args.PortraitData.Length + args.ProfileMessage.Length));
-        writer.WriteData16(args.PortraitData);
-        writer.WriteString16(args.ProfileMessage);
+        writer.WriteData(args.PortraitData);
+        writer.WriteString(args.ProfileMessage);
     }
 }

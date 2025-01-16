@@ -19,13 +19,13 @@ public sealed class GroupInviteConverter : PacketConverterBase<GroupInviteArgs>
     public override GroupInviteArgs Deserialize(ref SpanReader reader)
     {
         var groupRequestType = (ClientGroupSwitch)reader.ReadByte();
-        var targetName = reader.ReadString8();
+        var targetName = reader.ReadString();
         var groupBoxInfo = default(CreateGroupBoxInfo);
 
         if (groupRequestType == ClientGroupSwitch.CreateGroupbox)
         {
-            var name = reader.ReadString8();
-            var note = reader.ReadString8();
+            var name = reader.ReadString();
+            var note = reader.ReadString();
             var minLevel = reader.ReadByte();
             var maxLevel = reader.ReadByte();
             var maxWarriors = reader.ReadByte();
@@ -62,12 +62,12 @@ public sealed class GroupInviteConverter : PacketConverterBase<GroupInviteArgs>
     public override void Serialize(ref SpanWriter writer, GroupInviteArgs args)
     {
         writer.WriteByte((byte)args.ClientGroupSwitch);
-        writer.WriteString8(args.TargetName);
+        writer.WriteString(args.TargetName);
 
         if (args.ClientGroupSwitch == ClientGroupSwitch.CreateGroupbox)
         {
-            writer.WriteString8(args.GroupBoxInfo!.Name);
-            writer.WriteString8(args.GroupBoxInfo.Note);
+            writer.WriteString(args.GroupBoxInfo!.Name);
+            writer.WriteString(args.GroupBoxInfo.Note);
             writer.WriteByte(args.GroupBoxInfo.MinLevel);
             writer.WriteByte(args.GroupBoxInfo.MaxLevel);
             writer.WriteByte(args.GroupBoxInfo.MaxWarriors);

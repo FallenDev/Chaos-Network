@@ -84,7 +84,7 @@ public sealed class DialogInteractionConverter : PacketConverterBase<DialogInter
             case DialogArgsType.TextResponse:
                 if (!args.Args.IsNullOrEmpty())
                     foreach (var arg in args.Args.TakeLast(2))
-                        writer.WriteString8(arg);
+                        writer.WriteString(arg);
 
                 break;
             case DialogArgsType.None:

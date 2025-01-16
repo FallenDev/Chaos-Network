@@ -18,7 +18,7 @@ public sealed class WorldMapConverter : PacketConverterBase<WorldMapArgs>
     /// <inheritdoc />
     public override WorldMapArgs Deserialize(ref SpanReader reader)
     {
-        var fieldName = reader.ReadString8();
+        var fieldName = reader.ReadString();
         var nodeCount = reader.ReadByte();
         var fieldIndex = reader.ReadByte();
 
@@ -27,7 +27,7 @@ public sealed class WorldMapConverter : PacketConverterBase<WorldMapArgs>
         for (var i = 0; i < nodeCount; i++)
         {
             var screenPosition = reader.ReadPoint16();
-            var text = reader.ReadString8();
+            var text = reader.ReadString();
             var checkSum = reader.ReadUInt16();
             var mapId = reader.ReadUInt16();
             var destinationPoint = reader.ReadPoint16();
@@ -54,14 +54,14 @@ public sealed class WorldMapConverter : PacketConverterBase<WorldMapArgs>
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, WorldMapArgs args)
     {
-        writer.WriteString8(args.FieldName);
+        writer.WriteString(args.FieldName);
         writer.WriteByte((byte)args.Nodes.Count);
         writer.WriteByte(args.FieldIndex);
 
         foreach (var node in args.Nodes)
         {
             writer.WritePoint16(node.ScreenPosition);
-            writer.WriteString8(node.Text);
+            writer.WriteString(node.Text);
             writer.WriteUInt16(node.CheckSum);
             writer.WriteUInt16(node.MapId);
             writer.WritePoint16(node.DestinationPoint);

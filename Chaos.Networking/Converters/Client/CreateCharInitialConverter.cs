@@ -16,8 +16,8 @@ public sealed class CreateCharInitialConverter : PacketConverterBase<CreateCharI
     /// <inheritdoc />
     public override CreateCharInitialArgs Deserialize(ref SpanReader reader)
     {
-        var name = reader.ReadString8();
-        var pw = reader.ReadString8();
+        var name = reader.ReadString();
+        var pw = reader.ReadString();
 
         return new CreateCharInitialArgs
         {
@@ -29,7 +29,7 @@ public sealed class CreateCharInitialConverter : PacketConverterBase<CreateCharI
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, CreateCharInitialArgs args)
     {
-        writer.WriteString8(args.Name);
-        writer.WriteString8(args.Password);
+        writer.WriteString(args.Name);
+        writer.WriteString(args.Password);
     }
 }

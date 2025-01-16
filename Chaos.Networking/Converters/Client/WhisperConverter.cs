@@ -16,8 +16,8 @@ public sealed class WhisperConverter : PacketConverterBase<WhisperArgs>
     /// <inheritdoc />
     public override WhisperArgs Deserialize(ref SpanReader reader)
     {
-        var targetName = reader.ReadString8();
-        var message = reader.ReadString8();
+        var targetName = reader.ReadString();
+        var message = reader.ReadString();
 
         return new WhisperArgs
         {
@@ -29,7 +29,7 @@ public sealed class WhisperConverter : PacketConverterBase<WhisperArgs>
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, WhisperArgs args)
     {
-        writer.WriteString8(args.TargetName);
-        writer.WriteString8(args.Message);
+        writer.WriteString(args.TargetName);
+        writer.WriteString(args.Message);
     }
 }

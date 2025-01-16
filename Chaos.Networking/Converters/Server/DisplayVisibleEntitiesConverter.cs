@@ -38,8 +38,8 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
                     visibleObjects.Add(
                         new GroundItemInfo
                         {
-                            X = point.x,
-                            Y = point.y,
+                            X = point.X,
+                            Y = point.Y,
                             Id = id,
                             Sprite = (ushort)(sprite - NetworkingConstants.ItemSpriteOffset),
                             Color = (DisplayColor)color
@@ -56,8 +56,8 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
 
                     var creatureInfo = new CreatureInfo
                     {
-                        X = point.x,
-                        Y = point.y,
+                        X = point.X,
+                        Y = point.Y,
                         Id = id,
                         Sprite = (ushort)(sprite - NetworkingConstants.CreatureSpriteOffset),
                         Direction = (Direction)direction,
@@ -65,7 +65,7 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
                     };
 
                     if (creatureInfo.CreatureType == CreatureType.Merchant)
-                        creatureInfo.Name = reader.ReadString8();
+                        creatureInfo.Name = reader.ReadString();
 
                     visibleObjects.Add(creatureInfo);
 
@@ -101,7 +101,7 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
                     writer.WriteByte((byte)creature.CreatureType);
 
                     if (creature.CreatureType == CreatureType.Merchant)
-                        writer.WriteString8(creature.Name);
+                        writer.WriteString(creature.Name);
 
                     break;
                 }

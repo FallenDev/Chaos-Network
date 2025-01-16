@@ -21,7 +21,7 @@ public sealed class NotepadConverter : PacketConverterBase<NotepadArgs>
         var type = reader.ReadByte();
         var height = reader.ReadByte();
         var width = reader.ReadByte();
-        var message = reader.ReadString16();
+        var message = reader.ReadString();
 
         return new NotepadArgs
         {
@@ -40,6 +40,6 @@ public sealed class NotepadConverter : PacketConverterBase<NotepadArgs>
         writer.WriteByte((byte)args.NotepadType);
         writer.WriteByte(args.Height);
         writer.WriteByte(args.Width);
-        writer.WriteString16(args.Message);
+        writer.WriteString(args.Message);
     }
 }

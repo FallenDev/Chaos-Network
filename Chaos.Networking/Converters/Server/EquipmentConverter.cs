@@ -21,7 +21,7 @@ public sealed class EquipmentConverter : PacketConverterBase<EquipmentArgs>
         var slot = reader.ReadByte();
         var sprite = reader.ReadUInt16();
         var color = reader.ReadByte();
-        var name = reader.ReadString8();
+        var name = reader.ReadString();
         _ = reader.ReadByte(); //LI: what is this for?
         var maxDurability = reader.ReadUInt32();
         var currentDurability = reader.ReadUInt32();
@@ -47,7 +47,7 @@ public sealed class EquipmentConverter : PacketConverterBase<EquipmentArgs>
         writer.WriteByte((byte)args.Slot);
         writer.WriteUInt16((ushort)(args.Item.Sprite + NetworkingConstants.ItemSpriteOffset));
         writer.WriteByte((byte)args.Item.Color);
-        writer.WriteString8(args.Item.Name);
+        writer.WriteString(args.Item.Name);
         writer.WriteByte(0); //LI: what is this for?
         writer.WriteUInt32((uint)args.Item.MaxDurability);
         writer.WriteUInt32((uint)args.Item.CurrentDurability);

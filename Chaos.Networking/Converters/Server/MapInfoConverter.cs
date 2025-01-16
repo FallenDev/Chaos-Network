@@ -22,7 +22,7 @@ public sealed class MapInfoConverter : PacketConverterBase<MapInfoArgs>
         var flags = reader.ReadByte();
         _ = reader.ReadBytes(2); //LI: what is this for?
         var checkSum = reader.ReadUInt16();
-        var name = reader.ReadString8();
+        var name = reader.ReadString();
 
         return new MapInfoArgs
         {
@@ -44,6 +44,6 @@ public sealed class MapInfoConverter : PacketConverterBase<MapInfoArgs>
         writer.WriteByte(args.Flags);
         writer.WriteBytes(new byte[2]); //LI: what is this for?
         writer.WriteUInt16(args.CheckSum);
-        writer.WriteString8(args.Name);
+        writer.WriteString(args.Name);
     }
 }

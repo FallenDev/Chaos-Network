@@ -18,8 +18,8 @@ public sealed class LoginConverter : PacketConverterBase<LoginArgs>
     /// <inheritdoc />
     public override LoginArgs Deserialize(ref SpanReader reader)
     {
-        var name = reader.ReadString8();
-        var pw = reader.ReadString8();
+        var name = reader.ReadString();
+        var pw = reader.ReadString();
 
         return new LoginArgs
         {
@@ -31,8 +31,8 @@ public sealed class LoginConverter : PacketConverterBase<LoginArgs>
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, LoginArgs args)
     {
-        writer.WriteString8(args.Name);
-        writer.WriteString8(args.Password);
+        writer.WriteString(args.Name);
+        writer.WriteString(args.Password);
 
         //generate random keys
         var xorInverseSource = Random.Shared.Next<byte>(0, byte.MaxValue);

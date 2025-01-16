@@ -26,7 +26,7 @@ public sealed class IgnoreConverter : PacketConverterBase<IgnoreArgs>
 
         if (args.IgnoreType != IgnoreType.Request)
         {
-            var targetName = reader.ReadString8();
+            var targetName = reader.ReadString();
 
             args.TargetName = targetName;
         }
@@ -40,6 +40,6 @@ public sealed class IgnoreConverter : PacketConverterBase<IgnoreArgs>
         writer.WriteByte((byte)args.IgnoreType);
 
         if (args.IgnoreType != IgnoreType.Request)
-            writer.WriteString8(args.TargetName!);
+            writer.WriteString(args.TargetName!);
     }
 }

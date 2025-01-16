@@ -18,7 +18,7 @@ public sealed class LoginControlConverter : PacketConverterBase<LoginControlArgs
     public override LoginControlArgs Deserialize(ref SpanReader reader)
     {
         var loginControlsType = reader.ReadByte();
-        var message = reader.ReadString8();
+        var message = reader.ReadString();
 
         return new LoginControlArgs
         {
@@ -31,6 +31,6 @@ public sealed class LoginControlConverter : PacketConverterBase<LoginControlArgs
     public override void Serialize(ref SpanWriter writer, LoginControlArgs args)
     {
         writer.WriteByte((byte)args.LoginControlsType);
-        writer.WriteString8(args.Message);
+        writer.WriteString(args.Message);
     }
 }

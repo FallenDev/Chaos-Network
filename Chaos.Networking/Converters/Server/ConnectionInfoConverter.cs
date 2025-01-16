@@ -19,7 +19,7 @@ public sealed class ConnectionInfoConverter : PacketConverterBase<ConnectionInfo
         _ = reader.ReadByte(); //LI: what does this do?
         var tableCheckSum = reader.ReadUInt32();
         var seed = reader.ReadByte();
-        var key = reader.ReadString8();
+        var key = reader.ReadString();
 
         return new ConnectionInfoArgs
         {
@@ -35,6 +35,6 @@ public sealed class ConnectionInfoConverter : PacketConverterBase<ConnectionInfo
         writer.WriteByte(0); //LI: what does this do?
         writer.WriteUInt32(args.TableCheckSum);
         writer.WriteByte(args.Seed);
-        writer.WriteString8(args.Key);
+        writer.WriteString(args.Key);
     }
 }

@@ -34,7 +34,7 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 for (var i = 0; i < count; i++)
                 {
                     var boardId = reader.ReadUInt16();
-                    var boardName = reader.ReadString8();
+                    var boardName = reader.ReadString();
 
                     args.Boards.Add(
                         new BoardInfo
@@ -50,7 +50,7 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
             {
                 _ = reader.ReadBoolean();
                 var boardId = reader.ReadUInt16();
-                var boardName = reader.ReadString8();
+                var boardName = reader.ReadString();
 
                 args.Board = new BoardInfo
                 {
@@ -65,11 +65,11 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 var enablePrevBtn = reader.ReadBoolean();
                 _ = reader.ReadByte(); //LI: what is this for?
                 var postId = reader.ReadInt16();
-                var author = reader.ReadString8();
+                var author = reader.ReadString();
                 var month = reader.ReadByte();
                 var day = reader.ReadByte();
-                var subject = reader.ReadString8();
-                var message = reader.ReadString16();
+                var subject = reader.ReadString();
+                var message = reader.ReadString();
 
                 args.EnablePrevBtn = enablePrevBtn;
 
@@ -89,7 +89,7 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
             {
                 _ = reader.ReadBoolean();
                 var boardId = reader.ReadUInt16();
-                var boardName = reader.ReadString8();
+                var boardName = reader.ReadString();
                 var postCount = reader.ReadSByte();
                 var posts = new List<PostInfo>(postCount);
 
@@ -103,10 +103,10 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 {
                     var isHighlighted = reader.ReadBoolean();
                     var postId = reader.ReadInt16();
-                    var author = reader.ReadString8();
+                    var author = reader.ReadString();
                     var month = reader.ReadByte();
                     var day = reader.ReadByte();
-                    var subject = reader.ReadString8();
+                    var subject = reader.ReadString();
 
                     posts.Add(
                         new PostInfo
@@ -129,11 +129,11 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 args.EnablePrevBtn = reader.ReadBoolean();
                 _ = reader.ReadByte(); //LI: what is this for?
                 var postId = reader.ReadInt16();
-                var author = reader.ReadString8();
+                var author = reader.ReadString();
                 var month = reader.ReadByte();
                 var day = reader.ReadByte();
-                var subject = reader.ReadString8();
-                var message = reader.ReadString16();
+                var subject = reader.ReadString();
+                var message = reader.ReadString();
 
                 args.Post = new PostInfo
                 {
@@ -152,7 +152,7 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
             case BoardOrResponseType.HighlightPostResponse:
             {
                 var success = reader.ReadBoolean();
-                var responseMessage = reader.ReadString8();
+                var responseMessage = reader.ReadString();
 
                 args.Success = success;
                 args.ResponseMessage = responseMessage;
@@ -180,7 +180,7 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 foreach (var board in args.Boards)
                 {
                     writer.WriteUInt16(board.BoardId);
-                    writer.WriteString8(board.Name);
+                    writer.WriteString(board.Name);
                 }
 
                 break;
@@ -189,7 +189,7 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
             {
                 writer.WriteBoolean(false);
                 writer.WriteUInt16(args.Board!.BoardId);
-                writer.WriteString8(args.Board.Name);
+                writer.WriteString(args.Board.Name);
 
                 //order posts newest to oldest
                 var orderedPosts = (IEnumerable<PostInfo>)args.Board.Posts.OrderByDescending(p => p.PostId);
@@ -208,10 +208,10 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 {
                     writer.WriteBoolean(post.IsHighlighted);
                     writer.WriteInt16(post.PostId);
-                    writer.WriteString8(post.Author);
+                    writer.WriteString(post.Author);
                     writer.WriteByte((byte)post.MonthOfYear);
                     writer.WriteByte((byte)post.DayOfMonth);
-                    writer.WriteString8(post.Subject);
+                    writer.WriteString(post.Subject);
                 }
 
                 break;
@@ -221,11 +221,11 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 writer.WriteBoolean(args.EnablePrevBtn);
                 writer.WriteByte(0); //LI: what is this for?
                 writer.WriteInt16(args.Post!.PostId);
-                writer.WriteString8(args.Post.Author);
+                writer.WriteString(args.Post.Author);
                 writer.WriteByte((byte)args.Post.MonthOfYear);
                 writer.WriteByte((byte)args.Post.DayOfMonth);
-                writer.WriteString8(args.Post.Subject);
-                writer.WriteString16(args.Post.Message);
+                writer.WriteString(args.Post.Subject);
+                writer.WriteString(args.Post.Message);
 
                 break;
             }
@@ -233,7 +233,7 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
             {
                 writer.WriteBoolean(false);
                 writer.WriteUInt16(args.Board!.BoardId);
-                writer.WriteString8(args.Board.Name);
+                writer.WriteString(args.Board.Name);
 
                 //order posts newest to oldest
                 var orderedPosts = (IEnumerable<PostInfo>)args.Board.Posts.OrderByDescending(p => p.PostId);
@@ -252,10 +252,10 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 {
                     writer.WriteBoolean(post.IsHighlighted);
                     writer.WriteInt16(post.PostId);
-                    writer.WriteString8(post.Author);
+                    writer.WriteString(post.Author);
                     writer.WriteByte((byte)post.MonthOfYear);
                     writer.WriteByte((byte)post.DayOfMonth);
-                    writer.WriteString8(post.Subject);
+                    writer.WriteString(post.Subject);
                 }
 
                 break;
@@ -265,11 +265,11 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
                 writer.WriteBoolean(args.EnablePrevBtn);
                 writer.WriteByte(0); //LI: what is this for?
                 writer.WriteInt16(args.Post!.PostId);
-                writer.WriteString8(args.Post.Author);
+                writer.WriteString(args.Post.Author);
                 writer.WriteByte((byte)args.Post.MonthOfYear);
                 writer.WriteByte((byte)args.Post.DayOfMonth);
-                writer.WriteString8(args.Post.Subject);
-                writer.WriteString16(args.Post.Message);
+                writer.WriteString(args.Post.Subject);
+                writer.WriteString(args.Post.Message);
 
                 break;
             }
@@ -278,7 +278,7 @@ public sealed class DisplayBoardConverter : PacketConverterBase<DisplayBoardArgs
             case BoardOrResponseType.HighlightPostResponse:
             {
                 writer.WriteBoolean(args.Success!.Value);
-                writer.WriteString8(args.ResponseMessage!);
+                writer.WriteString(args.ResponseMessage!);
 
                 break;
             }

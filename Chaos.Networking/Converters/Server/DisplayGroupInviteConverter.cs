@@ -18,13 +18,13 @@ public sealed class DisplayGroupInviteConverter : PacketConverterBase<DisplayGro
     public override DisplayGroupInviteArgs Deserialize(ref SpanReader reader)
     {
         var groupRequestType = (ServerGroupSwitch)reader.ReadByte();
-        var sourceName = reader.ReadString8();
+        var sourceName = reader.ReadString();
         var groupBoxInfo = default(DisplayGroupBoxInfo);
 
         if (groupRequestType == ServerGroupSwitch.Invite)
         {
-            var name = reader.ReadString8();
-            var note = reader.ReadString8();
+            var name = reader.ReadString();
+            var note = reader.ReadString();
             var minLevel = reader.ReadByte();
             var maxLevel = reader.ReadByte();
 
@@ -74,12 +74,12 @@ public sealed class DisplayGroupInviteConverter : PacketConverterBase<DisplayGro
     public override void Serialize(ref SpanWriter writer, DisplayGroupInviteArgs args)
     {
         writer.WriteByte((byte)args.ServerGroupSwitch);
-        writer.WriteString8(args.SourceName);
+        writer.WriteString(args.SourceName);
 
         if (args.ServerGroupSwitch == ServerGroupSwitch.ShowGroupBox)
         {
-            writer.WriteString8(args.GroupBoxInfo!.Name);
-            writer.WriteString8(args.GroupBoxInfo.Note);
+            writer.WriteString(args.GroupBoxInfo!.Name);
+            writer.WriteString(args.GroupBoxInfo.Note);
             writer.WriteByte(args.GroupBoxInfo.MinLevel);
             writer.WriteByte(args.GroupBoxInfo.MaxLevel);
 

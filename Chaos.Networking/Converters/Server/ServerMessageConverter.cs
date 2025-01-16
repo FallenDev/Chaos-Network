@@ -18,7 +18,7 @@ public sealed class ServerMessageConverter : PacketConverterBase<ServerMessageAr
     public override ServerMessageArgs Deserialize(ref SpanReader reader)
     {
         var messageType = reader.ReadByte();
-        var message = reader.ReadString16();
+        var message = reader.ReadString();
 
         return new ServerMessageArgs
         {
@@ -31,6 +31,6 @@ public sealed class ServerMessageConverter : PacketConverterBase<ServerMessageAr
     public override void Serialize(ref SpanWriter writer, ServerMessageArgs args)
     {
         writer.WriteByte((byte)args.ServerMessageType);
-        writer.WriteString16(args.Message);
+        writer.WriteString(args.Message);
     }
 }

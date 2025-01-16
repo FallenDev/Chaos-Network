@@ -18,7 +18,7 @@ public sealed class LoginMessageConverter : PacketConverterBase<LoginMessageArgs
     public override LoginMessageArgs Deserialize(ref SpanReader reader)
     {
         var type = reader.ReadByte();
-        var message = reader.ReadString8();
+        var message = reader.ReadString();
 
         return new LoginMessageArgs
         {
@@ -31,6 +31,6 @@ public sealed class LoginMessageConverter : PacketConverterBase<LoginMessageArgs
     public override void Serialize(ref SpanWriter writer, LoginMessageArgs args)
     {
         writer.WriteByte((byte)args.LoginMessageType);
-        writer.WriteString8(args.LoginMessageType == LoginMessageType.Confirm ? "\0" : args.Message!);
+        writer.WriteString(args.Message);
     }
 }

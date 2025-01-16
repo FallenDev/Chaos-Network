@@ -44,13 +44,13 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
         }
 
         var socialStatus = reader.ReadByte();
-        var name = reader.ReadString8();
+        var name = reader.ReadString();
         var nation = reader.ReadByte();
-        var title = reader.ReadString8();
+        var title = reader.ReadString();
         var groupOpen = reader.ReadBoolean();
-        var guildRank = reader.ReadString8();
-        var displayClass = reader.ReadString8();
-        var guildName = reader.ReadString8();
+        var guildRank = reader.ReadString();
+        var displayClass = reader.ReadString();
+        var guildName = reader.ReadString();
         var legendMarkCount = reader.ReadByte();
         var legendMarks = new List<LegendMarkInfo>(legendMarkCount);
 
@@ -58,8 +58,8 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
         {
             var icon = reader.ReadByte();
             var color = reader.ReadByte();
-            var key = reader.ReadString8();
-            var text = reader.ReadString8();
+            var key = reader.ReadString();
+            var text = reader.ReadString();
 
             legendMarks.Add(
                 new LegendMarkInfo
@@ -91,8 +91,8 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
         if (remaining == 0)
             return args;
 
-        var portraitData = reader.ReadData16();
-        var profileText = reader.ReadString16();
+        var portraitData = reader.ReadData();
+        var profileText = reader.ReadString();
 
         args.Portrait = portraitData.ToArray();
         args.ProfileText = profileText;
@@ -119,21 +119,21 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
         }
 
         writer.WriteByte((byte)args.SocialStatus);
-        writer.WriteString8(args.Name);
+        writer.WriteString(args.Name);
         writer.WriteByte((byte)args.Nation);
-        writer.WriteString8(args.Title ?? string.Empty);
+        writer.WriteString(args.Title ?? string.Empty);
         writer.WriteBoolean(args.GroupOpen);
-        writer.WriteString8(args.GuildRank ?? string.Empty);
-        writer.WriteString8(args.JobClass != JobClass.None ? args.JobClass.ToString() : args.DisplayClass);
-        writer.WriteString8(args.GuildName ?? string.Empty);
+        writer.WriteString(args.GuildRank ?? string.Empty);
+        writer.WriteString(args.JobClass != JobClass.None ? args.JobClass.ToString() : args.DisplayClass);
+        writer.WriteString(args.GuildName ?? string.Empty);
         writer.WriteByte((byte)Math.Min(byte.MaxValue, args.LegendMarks.Count));
 
         foreach (var mark in args.LegendMarks)
         {
             writer.WriteByte((byte)mark.Icon);
             writer.WriteByte((byte)mark.Color);
-            writer.WriteString8(mark.Key);
-            writer.WriteString8(mark.Text);
+            writer.WriteString(mark.Key);
+            writer.WriteString(mark.Text);
         }
 
         var remaining = args.Portrait.Length;
@@ -145,8 +145,8 @@ public sealed class OtherProfileConverter : PacketConverterBase<OtherProfileArgs
         else //if there's data, write the length of the data + 4 for prefixes
         {
             writer.WriteUInt16((ushort)(remaining + 4));
-            writer.WriteData16(args.Portrait); //2 + length
-            writer.WriteString16(args.ProfileText ?? string.Empty); //2 + length
+            writer.WriteData(args.Portrait); //2 + length
+            writer.WriteString(args.ProfileText ?? string.Empty); //2 + length
         }
 
         //nfi

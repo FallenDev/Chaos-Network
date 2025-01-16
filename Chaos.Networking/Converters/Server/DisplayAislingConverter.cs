@@ -25,8 +25,8 @@ public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAisling
 
         var args = new DisplayAislingArgs
         {
-            X = point.x,
-            Y = point.y,
+            X = point.X,
+            Y = point.Y,
             Direction = (Direction)direction,
             Id = id
         };
@@ -101,8 +101,8 @@ public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAisling
         }
 
         args.NameTagStyle = (NameTagStyle)reader.ReadByte();
-        args.Name = reader.ReadString8();
-        args.GroupBoxText = reader.ReadString8();
+        args.Name = reader.ReadString();
+        args.GroupBoxText = reader.ReadString();
 
         if (args is { BodySprite: BodySprite.None, IsTransparent: true })
         {
@@ -171,7 +171,7 @@ public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAisling
         }
 
         writer.WriteByte((byte)args.NameTagStyle);
-        writer.WriteString8(args.Name);
-        writer.WriteString8(args.GroupBoxText ?? string.Empty);
+        writer.WriteString(args.Name);
+        writer.WriteString(args.GroupBoxText ?? string.Empty);
     }
 }

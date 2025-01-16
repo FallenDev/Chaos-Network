@@ -54,8 +54,8 @@ public sealed class BoardInteractionConverter : PacketConverterBase<BoardInterac
             case BoardRequestType.NewPost:
             {
                 var boardId = reader.ReadUInt16();
-                var subject = reader.ReadString8();
-                var message = reader.ReadString16();
+                var subject = reader.ReadString();
+                var message = reader.ReadString();
 
                 args.BoardId = boardId;
                 args.Subject = subject;
@@ -76,9 +76,9 @@ public sealed class BoardInteractionConverter : PacketConverterBase<BoardInterac
             case BoardRequestType.SendMail:
             {
                 var boardId = reader.ReadUInt16();
-                var to = reader.ReadString8();
-                var subject = reader.ReadString8();
-                var message = reader.ReadString16();
+                var to = reader.ReadString();
+                var subject = reader.ReadString();
+                var message = reader.ReadString();
 
                 args.BoardId = boardId;
                 args.To = to;
@@ -134,8 +134,8 @@ public sealed class BoardInteractionConverter : PacketConverterBase<BoardInterac
             case BoardRequestType.NewPost:
             {
                 writer.WriteUInt16(args.BoardId!.Value);
-                writer.WriteString8(args.Subject!);
-                writer.WriteString16(args.Message!);
+                writer.WriteString(args.Subject!);
+                writer.WriteString(args.Message!);
 
                 break;
             }
@@ -149,9 +149,9 @@ public sealed class BoardInteractionConverter : PacketConverterBase<BoardInterac
             case BoardRequestType.SendMail:
             {
                 writer.WriteUInt16(args.BoardId!.Value);
-                writer.WriteString8(args.To!);
-                writer.WriteString8(args.Subject!);
-                writer.WriteString16(args.Message!);
+                writer.WriteString(args.To!);
+                writer.WriteString(args.Subject!);
+                writer.WriteString(args.Message!);
 
                 break;
             }

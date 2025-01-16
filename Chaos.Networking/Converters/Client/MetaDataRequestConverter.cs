@@ -28,7 +28,7 @@ public sealed class MetaDataRequestConverter : PacketConverterBase<MetaDataReque
         {
             case MetaDataRequestType.DataByName:
             {
-                var name = reader.ReadString8();
+                var name = reader.ReadString();
 
                 args.Name = name;
 
@@ -51,7 +51,7 @@ public sealed class MetaDataRequestConverter : PacketConverterBase<MetaDataReque
         switch (args.MetaDataRequestType)
         {
             case MetaDataRequestType.DataByName:
-                writer.WriteString8(args.Name!);
+                writer.WriteString(args.Name!);
 
                 break;
             case MetaDataRequestType.AllCheckSums:

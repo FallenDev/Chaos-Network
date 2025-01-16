@@ -8,7 +8,7 @@ namespace Chaos.IO.Memory;
 /// </summary>
 public ref struct SpanWriter
 {
-    private readonly Span<byte> Buffer;
+    private Span<byte> Buffer;
     private int Position;
 
     /// <summary>
@@ -22,6 +22,36 @@ public ref struct SpanWriter
     }
 
     /// <summary>
+    /// Gets a value indicating whether the writer has reached or exceeded the end of the span.
+    /// </summary>
+    public bool EndOfSpan => Position >= Buffer.Length;
+
+    /// <summary>
+    /// Ensures there is enough space to write the specified number of bytes.
+    /// If not, resizes the buffer dynamically.
+    /// </summary>
+    /// <param name="count">The number of bytes to check for.</param>
+    private void EnsureCapacity(int count)
+    {
+        if (Position + count > Buffer.Length)
+        {
+            ResizeBuffer(Position + count);
+        }
+    }
+
+    /// <summary>
+    /// Dynamically resizes the buffer to accommodate additional data.
+    /// </summary>
+    /// <param name="requiredSize">The minimum required size for the buffer.</param>
+    private void ResizeBuffer(int requiredSize)
+    {
+        var newSize = Math.Max(Buffer.Length * 2, requiredSize);
+        var newBuffer = new byte[newSize];
+        Buffer[..Position].CopyTo(newBuffer);
+        Buffer = newBuffer;
+    }
+
+    /// <summary>
     /// Writes a boolean value to the buffer.
     /// </summary>
     public void WriteBoolean(bool value) => WriteByte(value ? (byte)1 : (byte)0);
@@ -29,12 +59,14 @@ public ref struct SpanWriter
     // Write Unsigned Numeric Types
     public void WriteUInt16(ushort value)
     {
+        EnsureCapacity(2);
         Buffer[Position++] = (byte)(value >> 8);
         Buffer[Position++] = (byte)(value & 0xFF);
     }
 
     public void WriteUInt32(uint value)
     {
+        EnsureCapacity(4);
         Buffer[Position++] = (byte)(value >> 24);
         Buffer[Position++] = (byte)((value >> 16) & 0xFF);
         Buffer[Position++] = (byte)((value >> 8) & 0xFF);
@@ -43,6 +75,7 @@ public ref struct SpanWriter
 
     public void WriteUInt64(ulong value)
     {
+        EnsureCapacity(8);
         for (var i = 7; i >= 0; i--)
         {
             Buffer[Position++] = (byte)(value >> (i * 8));
@@ -121,46 +154,58 @@ public ref struct SpanWriter
     // Write String with Dynamic Length Prefix
     public void WriteString(string value)
     {
-        var bytes = Encoding.ASCII.GetBytes(value);
-        if (bytes.Length <= byte.MaxValue)
+        var bytes = Encoding.UTF8.GetBytes(value);
+        switch (bytes.Length)
         {
-            WriteString8(value);
-        }
-        else
-        {
-            WriteString16(value);
+            case <= byte.MaxValue:
+                WriteByte(0);
+                WriteString8(bytes);
+                break;
+            case <= ushort.MaxValue:
+                WriteByte(1);
+                WriteString16(bytes);
+                break;
+            default:
+                WriteByte(2);
+                WriteString32(bytes);
+                break;
         }
     }
 
     // Write String with 8-bit Length Prefix
-    public void WriteString8(string value)
+    private void WriteString8(byte[] bytes)
     {
-        var bytes = Encoding.ASCII.GetBytes(value);
         if (bytes.Length > byte.MaxValue)
-            throw new ArgumentException("String is too long for 8-bit length prefix.");
+        {
+            WriteString16(bytes);
+            return;
+        }
 
         WriteByte((byte)bytes.Length);
         WriteBytes(bytes);
     }
 
     // Write String with 16-bit Length Prefix
-    public void WriteString16(string value)
+    private void WriteString16(byte[] bytes)
     {
-        var bytes = Encoding.ASCII.GetBytes(value);
         if (bytes.Length > ushort.MaxValue)
-            throw new ArgumentException("String is too long for 16-bit length prefix.");
+        {
+            WriteString32(bytes);
+            return;
+        }
 
         WriteUInt16((ushort)bytes.Length);
         WriteBytes(bytes);
     }
 
-    // Write Bytes
-    public void WriteBytes(ReadOnlySpan<byte> bytes)
+    // Write String with 32-bit Length Prefix
+    private void WriteString32(byte[] bytes)
     {
-        bytes.CopyTo(Buffer[Position..]);
-        Position += bytes.Length;
+        WriteUInt32((uint)bytes.Length);
+        WriteBytes(bytes);
     }
 
+    // Write Bytes
     public void WriteBytes(params byte[] bytes)
     {
         foreach (var b in bytes)
@@ -169,38 +214,48 @@ public ref struct SpanWriter
         }
     }
 
-    // Write Raw Data
-    public void WriteData16(ReadOnlySpan<byte> data)
+    public void WriteBytes(ReadOnlySpan<byte> bytes)
     {
-        if (data.Length > ushort.MaxValue)
-            throw new ArgumentException("Data too large for a 16-bit length prefix.");
+        EnsureCapacity(bytes.Length);
+        bytes.CopyTo(Buffer[Position..]);
+        Position += bytes.Length;
+    }
 
+    // Write Raw Data
+    private void WriteData8(ReadOnlySpan<byte> data)
+    {
+        WriteByte((byte)data.Length);
+        WriteBytes(data);
+    }
+
+    private void WriteData16(ReadOnlySpan<byte> data)
+    {
         WriteUInt16((ushort)data.Length);
         WriteBytes(data);
     }
 
-    public void WriteData8(ReadOnlySpan<byte> data)
+    private void WriteData32(ReadOnlySpan<byte> data)
     {
-        if (data.Length > byte.MaxValue)
-            throw new ArgumentException("Data too large for an 8-bit length prefix.");
-
-        WriteByte((byte)data.Length);
+        WriteUInt32((uint)data.Length);
         WriteBytes(data);
     }
 
     public void WriteData(ReadOnlySpan<byte> data)
     {
-        if (data.Length <= byte.MaxValue)
+        switch (data.Length)
         {
-            WriteData8(data);
-        }
-        else if (data.Length <= ushort.MaxValue)
-        {
-            WriteData16(data);
-        }
-        else
-        {
-            throw new ArgumentException("Data too large to serialize dynamically.");
+            case <= byte.MaxValue:
+                WriteByte(0);
+                WriteData8(data);
+                break;
+            case <= ushort.MaxValue:
+                WriteByte(1);
+                WriteData16(data);
+                break;
+            default:
+                WriteByte(2);
+                WriteData32(data);
+                break;
         }
     }
 
@@ -209,7 +264,7 @@ public ref struct SpanWriter
     {
         foreach (var arg in args)
         {
-            WriteString8(arg);
+            WriteString(arg);
         }
     }
 
@@ -222,10 +277,18 @@ public ref struct SpanWriter
     }
 
     // Write Single Byte
-    public void WriteByte(byte value) => Buffer[Position++] = value;
+    public void WriteByte(byte value)
+    {
+        EnsureCapacity(1);
+        Buffer[Position++] = value;
+    }
 
     // Write Signed Byte
-    public void WriteSByte(sbyte value) => Buffer[Position++] = (byte)value;
+    public void WriteSByte(sbyte value)
+    {
+        EnsureCapacity(1);
+        Buffer[Position++] = (byte)value;
+    }
 
     /// <summary>
     /// Trims the buffer to the written content and returns it as a span.

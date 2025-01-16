@@ -19,7 +19,7 @@ public sealed class DisplayPublicMessageConverter : PacketConverterBase<DisplayP
     {
         var messageType = reader.ReadByte();
         var sourceId = reader.ReadUInt32();
-        var message = reader.ReadString8();
+        var message = reader.ReadString();
 
         return new DisplayPublicMessageArgs
         {
@@ -34,6 +34,6 @@ public sealed class DisplayPublicMessageConverter : PacketConverterBase<DisplayP
     {
         writer.WriteByte((byte)args.PublicMessageType);
         writer.WriteUInt32(args.SourceId);
-        writer.WriteString8(args.Message);
+        writer.WriteString(args.Message);
     }
 }

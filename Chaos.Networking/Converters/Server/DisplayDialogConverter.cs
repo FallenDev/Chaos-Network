@@ -39,8 +39,8 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
         var hasPreviousButton = reader.ReadBoolean();
         var hasNextButton = reader.ReadBoolean();
         var shouldIllustrate = reader.ReadBoolean();
-        var name = reader.ReadString8();
-        var text = reader.ReadString16();
+        var name = reader.ReadString();
+        var text = reader.ReadString();
 
         if (sprite == 0)
             sprite = sprite2;
@@ -87,7 +87,7 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
 
                 for (var i = 0; i < optionsCount; i++)
                 {
-                    var option = reader.ReadString8();
+                    var option = reader.ReadString();
 
                     options.Add(option);
                 }
@@ -98,7 +98,7 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
             }
             case DialogType.TextEntry:
             {
-                var textBoxPrompt = reader.ReadString8();
+                var textBoxPrompt = reader.ReadString();
                 var textBoxLength = reader.ReadByte();
 
                 args.TextBoxPrompt = textBoxPrompt;
@@ -115,7 +115,7 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
 
                 for (var i = 0; i < optionsCount; i++)
                 {
-                    var option = reader.ReadString8();
+                    var option = reader.ReadString();
 
                     options.Add(option);
                 }
@@ -171,8 +171,8 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
         writer.WriteBoolean(args.HasPreviousButton);
         writer.WriteBoolean(args.HasNextButton);
         writer.WriteBoolean(args.ShouldIllustrate);
-        writer.WriteString8(args.Name);
-        writer.WriteString16(args.Text);
+        writer.WriteString(args.Name);
+        writer.WriteString(args.Text);
 
         switch (args.DialogType)
         {
@@ -182,11 +182,11 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
                 writer.WriteByte((byte)args.Options!.Count);
 
                 foreach (var option in args.Options)
-                    writer.WriteString8(option);
+                    writer.WriteString(option);
 
                 break;
             case DialogType.TextEntry:
-                writer.WriteString8(args.TextBoxPrompt ?? string.Empty);
+                writer.WriteString(args.TextBoxPrompt ?? string.Empty);
                 writer.WriteByte((byte)(args.TextBoxLength ?? 0));
 
                 break;
@@ -196,7 +196,7 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
                 writer.WriteByte((byte)args.Options!.Count);
 
                 foreach (var option in args.Options)
-                    writer.WriteString8(option);
+                    writer.WriteString(option);
 
                 break;
             case DialogType.Protected:

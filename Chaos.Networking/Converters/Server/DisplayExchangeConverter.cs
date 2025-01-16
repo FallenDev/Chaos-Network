@@ -30,7 +30,7 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
             case ExchangeResponseType.StartExchange:
             {
                 var otherUserId = reader.ReadUInt32();
-                var otherUserName = reader.ReadString8();
+                var otherUserName = reader.ReadString();
 
                 args.OtherUserId = otherUserId;
                 args.OtherUserName = otherUserName;
@@ -51,7 +51,7 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
                 var exchangeIndex = reader.ReadByte();
                 var itemSprite = reader.ReadUInt16();
                 var itemColor = reader.ReadByte();
-                var itemName = reader.ReadString8();
+                var itemName = reader.ReadString();
 
                 args.RightSide = rightSide;
                 args.ExchangeIndex = exchangeIndex;
@@ -74,7 +74,7 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
             case ExchangeResponseType.Cancel:
             {
                 var rightSide = reader.ReadBoolean();
-                var message = reader.ReadString8();
+                var message = reader.ReadString();
 
                 args.RightSide = rightSide;
                 args.Message = message;
@@ -84,7 +84,7 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
             case ExchangeResponseType.Accept:
             {
                 var persistExchange = reader.ReadBoolean();
-                var message = reader.ReadString8();
+                var message = reader.ReadString();
 
                 args.PersistExchange = persistExchange;
                 args.Message = message;
@@ -110,7 +110,7 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
         {
             case ExchangeResponseType.StartExchange:
                 writer.WriteUInt32(args.OtherUserId!.Value);
-                writer.WriteString8(args.OtherUserName);
+                writer.WriteString(args.OtherUserName);
 
                 break;
             case ExchangeResponseType.RequestAmount:
@@ -122,7 +122,7 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
                 writer.WriteByte(args.ExchangeIndex!.Value);
                 writer.WriteUInt16((ushort)(args.ItemSprite!.Value + NetworkingConstants.ItemSpriteOffset));
                 writer.WriteByte((byte)args.ItemColor!.Value);
-                writer.WriteString8(args.ItemName!);
+                writer.WriteString(args.ItemName!);
 
                 break;
             case ExchangeResponseType.SetGold:
@@ -132,12 +132,12 @@ public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchan
                 break;
             case ExchangeResponseType.Cancel:
                 writer.WriteBoolean(args.RightSide!.Value);
-                writer.WriteString8(args.Message!);
+                writer.WriteString(args.Message!);
 
                 break;
             case ExchangeResponseType.Accept:
                 writer.WriteBoolean(args.PersistExchange!.Value);
-                writer.WriteString8(args.Message!);
+                writer.WriteString(args.Message!);
 
                 break;
             default:

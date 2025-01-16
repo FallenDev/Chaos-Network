@@ -16,9 +16,9 @@ public sealed class PasswordChangeConverter : PacketConverterBase<PasswordChange
     /// <inheritdoc />
     public override PasswordChangeArgs Deserialize(ref SpanReader reader)
     {
-        var name = reader.ReadString8();
-        var currentPw = reader.ReadString8();
-        var newPw = reader.ReadString8();
+        var name = reader.ReadString();
+        var currentPw = reader.ReadString();
+        var newPw = reader.ReadString();
 
         return new PasswordChangeArgs
         {
@@ -31,8 +31,8 @@ public sealed class PasswordChangeConverter : PacketConverterBase<PasswordChange
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, PasswordChangeArgs args)
     {
-        writer.WriteString8(args.Name);
-        writer.WriteString8(args.CurrentPassword);
-        writer.WriteString8(args.NewPassword);
+        writer.WriteString(args.Name);
+        writer.WriteString(args.CurrentPassword);
+        writer.WriteString(args.NewPassword);
     }
 }

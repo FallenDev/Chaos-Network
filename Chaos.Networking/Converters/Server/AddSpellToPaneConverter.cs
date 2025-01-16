@@ -20,8 +20,8 @@ public sealed class AddSpellToPaneConverter : PacketConverterBase<AddSpellToPane
         var slot = reader.ReadByte();
         var sprite = reader.ReadUInt16();
         var spellType = reader.ReadByte();
-        var panelName = reader.ReadString8();
-        var prompt = reader.ReadString8();
+        var panelName = reader.ReadString();
+        var prompt = reader.ReadString();
         var castLines = reader.ReadByte();
 
         return new AddSpellToPaneArgs
@@ -44,8 +44,8 @@ public sealed class AddSpellToPaneConverter : PacketConverterBase<AddSpellToPane
         writer.WriteByte(args.Spell.Slot);
         writer.WriteUInt16(args.Spell.Sprite);
         writer.WriteByte((byte)args.Spell.SpellType);
-        writer.WriteString8(args.Spell.PanelName);
-        writer.WriteString8(args.Spell.Prompt);
+        writer.WriteString(args.Spell.PanelName);
+        writer.WriteString(args.Spell.Prompt);
         writer.WriteByte(args.Spell.CastLines);
     }
 }

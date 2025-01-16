@@ -28,8 +28,8 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
         var sprite2 = reader.ReadUInt16();
         var color2 = reader.ReadByte();
         var shouldIllustrate = reader.ReadBoolean();
-        var name = reader.ReadString8();
-        var text = reader.ReadString16();
+        var name = reader.ReadString();
+        var text = reader.ReadString();
 
         if (sprite == 0)
             sprite = sprite2;
@@ -70,7 +70,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
 
                 for (var i = 0; i < optionCount; i++)
                 {
-                    var optionText = reader.ReadString8();
+                    var optionText = reader.ReadString();
                     var optionPursuit = reader.ReadUInt16();
 
                     options.Add((optionText, optionPursuit));
@@ -82,13 +82,13 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
             }
             case MenuType.MenuWithArgs:
             {
-                var args = reader.ReadString8();
+                var args = reader.ReadString();
                 var optionCount = reader.ReadByte();
                 var options = new List<(string Text, ushort Pursuit)>(optionCount);
 
                 for (var i = 0; i < optionCount; i++)
                 {
-                    var optionText = reader.ReadString8();
+                    var optionText = reader.ReadString();
                     var optionPursuit = reader.ReadUInt16();
 
                     options.Add((optionText, optionPursuit));
@@ -109,7 +109,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
             }
             case MenuType.TextEntryWithArgs:
             {
-                var args = reader.ReadString8();
+                var args = reader.ReadString();
                 var pursuitId = reader.ReadUInt16();
 
                 menuArgs.Args = args;
@@ -128,8 +128,8 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
                     var itemSprite = reader.ReadUInt16();
                     var itemColor = reader.ReadByte();
                     var cost = reader.ReadInt32();
-                    var itemName = reader.ReadString8();
-                    _ = reader.ReadString8(); //LI: what is this for?
+                    var itemName = reader.ReadString();
+                    _ = reader.ReadString(); //LI: what is this for?
 
                     items.Add(
                         new ItemInfo
@@ -171,7 +171,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
                     _ = reader.ReadByte(); //EntityType (see below)
                     var icon = reader.ReadUInt16();
                     _ = reader.ReadByte(); //color if entityType is item
-                    var spellName = reader.ReadString8();
+                    var spellName = reader.ReadString();
 
                     spells.Add(
                         new SpellInfo
@@ -197,7 +197,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
                     _ = reader.ReadByte(); //EntityType (see below)
                     var icon = reader.ReadUInt16();
                     _ = reader.ReadByte(); //color if entityType is item
-                    var skillName = reader.ReadString8();
+                    var skillName = reader.ReadString();
 
                     skills.Add(
                         new SkillInfo
@@ -258,8 +258,8 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
         writer.WriteUInt16(offsetSprite);
         writer.WriteByte((byte)args.Color);
         writer.WriteBoolean(args.ShouldIllustrate);
-        writer.WriteString8(args.Name);
-        writer.WriteString16(args.Text);
+        writer.WriteString(args.Name);
+        writer.WriteString(args.Text);
 
         switch (args.MenuType)
         {
@@ -269,7 +269,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
 
                 foreach (var option in args.Options)
                 {
-                    writer.WriteString8(option.Text);
+                    writer.WriteString(option.Text);
                     writer.WriteUInt16(option.Pursuit);
                 }
 
@@ -277,12 +277,12 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
             }
             case MenuType.MenuWithArgs:
             {
-                writer.WriteString8(args.Args!);
+                writer.WriteString(args.Args!);
                 writer.WriteByte((byte)args.Options!.Count);
 
                 foreach (var option in args.Options)
                 {
-                    writer.WriteString8(option.Text);
+                    writer.WriteString(option.Text);
                     writer.WriteUInt16(option.Pursuit);
                 }
 
@@ -293,7 +293,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
 
                 break;
             case MenuType.TextEntryWithArgs:
-                writer.WriteString8(args.Args!);
+                writer.WriteString(args.Args!);
                 writer.WriteUInt16(args.PursuitId);
 
                 break;
@@ -307,10 +307,10 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
                     writer.WriteUInt16((ushort)(item.Sprite + NetworkingConstants.ItemSpriteOffset));
                     writer.WriteByte((byte)item.Color);
                     writer.WriteUInt32((uint)item.Cost!.Value);
-                    writer.WriteString8(item.Name);
+                    writer.WriteString(item.Name);
 
                     //TODO: figure out what this is, maybe something to do with metadatas
-                    writer.WriteString8("what is this");
+                    writer.WriteString("what is this");
                 }
 
                 break;
@@ -336,7 +336,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
                     writer.WriteByte(2);
                     writer.WriteUInt16(spell.Sprite);
                     writer.WriteByte(0); //color
-                    writer.WriteString8(spell.Name);
+                    writer.WriteString(spell.Name);
                 }
 
                 break;
@@ -349,7 +349,7 @@ public sealed class DisplayMenuConverter : PacketConverterBase<DisplayMenuArgs>
                     writer.WriteByte(3);
                     writer.WriteUInt16(skill.Sprite);
                     writer.WriteByte(0); //color
-                    writer.WriteString8(skill.Name);
+                    writer.WriteString(skill.Name);
                 }
 
                 break;
