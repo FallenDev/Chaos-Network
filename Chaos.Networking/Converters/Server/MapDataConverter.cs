@@ -14,17 +14,7 @@ public sealed class MapDataConverter : PacketConverterBase<MapDataArgs>
     public override byte OpCode => (byte)ServerOpCode.MapData;
 
     /// <inheritdoc />
-    public override MapDataArgs Deserialize(ref SpanReader reader)
-    {
-        var yIndex = reader.ReadUInt16();
-        var mapData = reader.ReadData();
-
-        return new MapDataArgs
-        {
-            CurrentYIndex = (byte)yIndex,
-            MapData = mapData.ToArray()
-        };
-    }
+    public override MapDataArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, MapDataArgs args)

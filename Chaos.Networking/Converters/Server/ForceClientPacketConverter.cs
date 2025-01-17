@@ -14,18 +14,7 @@ public sealed class ForceClientPacketConverter : PacketConverterBase<ForceClient
     public override byte OpCode => (byte)ServerOpCode.ForceClientPacket;
 
     /// <inheritdoc />
-    public override ForceClientPacketArgs Deserialize(ref SpanReader reader)
-    {
-        var length = reader.ReadUInt16();
-        var opCode = reader.ReadByte();
-        var data = reader.ReadBytes(length - 1);
-
-        return new ForceClientPacketArgs
-        {
-            ClientOpCode = (ClientOpCode)opCode,
-            Data = data
-        };
-    }
+    public override ForceClientPacketArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, ForceClientPacketArgs args)

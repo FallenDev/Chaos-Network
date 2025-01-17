@@ -17,22 +17,7 @@ public sealed class ClientWalkResponseConverter : PacketConverterBase<ClientWalk
     public override byte OpCode => (byte)ServerOpCode.ClientWalkResponse;
 
     /// <inheritdoc />
-    public override ClientWalkResponseArgs Deserialize(ref SpanReader reader)
-    {
-        var direction = reader.ReadByte();
-        var oldPoint = reader.ReadPoint16();
-
-        //these confirmed do nothing, but crash the client if not sent
-        //_ = reader.ReadUInt16();
-        //_ = reader.ReadUInt16();
-        //_ = reader.ReadByte();
-
-        return new ClientWalkResponseArgs
-        {
-            Direction = (Direction)direction,
-            OldPoint = (Point)oldPoint
-        };
-    }
+    public override ClientWalkResponseArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, ClientWalkResponseArgs args)

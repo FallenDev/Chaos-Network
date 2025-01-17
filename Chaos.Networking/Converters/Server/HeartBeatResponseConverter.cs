@@ -14,17 +14,7 @@ public sealed class HeartBeatResponseConverter : PacketConverterBase<HeartBeatRe
     public override byte OpCode => (byte)ServerOpCode.HeartBeatResponse;
 
     /// <inheritdoc />
-    public override HeartBeatResponseArgs Deserialize(ref SpanReader reader)
-    {
-        var first = reader.ReadByte();
-        var second = reader.ReadByte();
-
-        return new HeartBeatResponseArgs
-        {
-            First = first,
-            Second = second
-        };
-    }
+    public override HeartBeatResponseArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, HeartBeatResponseArgs responseArgs)

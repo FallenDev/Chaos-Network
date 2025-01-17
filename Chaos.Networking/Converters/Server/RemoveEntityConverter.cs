@@ -14,15 +14,7 @@ public sealed class RemoveEntityConverter : PacketConverterBase<RemoveEntityArgs
     public override byte OpCode => (byte)ServerOpCode.RemoveEntity;
 
     /// <inheritdoc />
-    public override RemoveEntityArgs Deserialize(ref SpanReader reader)
-    {
-        var sourceId = reader.ReadUInt32();
-
-        return new RemoveEntityArgs
-        {
-            SourceId = sourceId
-        };
-    }
+    public override RemoveEntityArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, RemoveEntityArgs args) => writer.WriteUInt32(args.SourceId);

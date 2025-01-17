@@ -14,29 +14,7 @@ public sealed class LoginNoticeConverter : PacketConverterBase<LoginNoticeArgs>
     public override byte OpCode => (byte)ServerOpCode.LoginNotice;
 
     /// <inheritdoc />
-    public override LoginNoticeArgs Deserialize(ref SpanReader reader)
-    {
-        var isFullResponse = reader.ReadBoolean();
-
-        var args = new LoginNoticeArgs
-        {
-            IsFullResponse = isFullResponse
-        };
-
-        if (isFullResponse)
-        {
-            var data = reader.ReadData();
-
-            args.Data = data.ToArray();
-        } else
-        {
-            var checkSum = reader.ReadUInt32();
-
-            args.CheckSum = checkSum;
-        }
-
-        return args;
-    }
+    public override LoginNoticeArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, LoginNoticeArgs args)

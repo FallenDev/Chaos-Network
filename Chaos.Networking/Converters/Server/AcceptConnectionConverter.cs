@@ -14,16 +14,7 @@ public class AcceptConnectionConverter : PacketConverterBase<AcceptConnectionArg
     public override byte OpCode => (byte)ServerOpCode.AcceptConnection;
 
     /// <inheritdoc />
-    public override AcceptConnectionArgs Deserialize(ref SpanReader reader)
-    {
-        _ = reader.ReadByte();
-        var message = reader.ReadString();
-
-        return new AcceptConnectionArgs
-        {
-            Message = message
-        };
-    }
+    public override AcceptConnectionArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, AcceptConnectionArgs args)

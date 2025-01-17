@@ -14,7 +14,7 @@ public class EditableProfileRequestConverter : PacketConverterBase<EditableProfi
     public override byte OpCode => (byte)ServerOpCode.EditableProfileRequest;
 
     /// <inheritdoc />
-    public override EditableProfileRequestArgs Deserialize(ref SpanReader reader) => new();
+    public override EditableProfileRequestArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, EditableProfileRequestArgs args)

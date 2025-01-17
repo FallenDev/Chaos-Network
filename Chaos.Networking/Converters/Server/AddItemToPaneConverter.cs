@@ -16,32 +16,7 @@ public sealed class AddItemToPaneConverter : PacketConverterBase<AddItemToPaneAr
     public override byte OpCode => (byte)ServerOpCode.AddItemToPane;
 
     /// <inheritdoc />
-    public override AddItemToPaneArgs Deserialize(ref SpanReader reader)
-    {
-        var slot = reader.ReadByte();
-        var sprite = reader.ReadUInt16();
-        var color = reader.ReadByte();
-        var name = reader.ReadString();
-        var count = reader.ReadUInt32();
-        var stackable = reader.ReadBoolean();
-        var maxDurability = reader.ReadUInt32();
-        var currentDurability = reader.ReadUInt32();
-
-        return new AddItemToPaneArgs
-        {
-            Item = new ItemInfo
-            {
-                Slot = slot,
-                Sprite = (ushort)(sprite - NetworkingConstants.ItemSpriteOffset),
-                Color = (DisplayColor)color,
-                Name = name,
-                Count = count,
-                Stackable = stackable,
-                MaxDurability = (int)maxDurability,
-                CurrentDurability = (int)currentDurability
-            }
-        };
-    }
+    public override AddItemToPaneArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, AddItemToPaneArgs args)

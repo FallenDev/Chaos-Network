@@ -15,15 +15,7 @@ public sealed class DisplayUnequipConverter : PacketConverterBase<DisplayUnequip
     public override byte OpCode => (byte)ServerOpCode.DisplayUnequip;
 
     /// <inheritdoc />
-    public override DisplayUnequipArgs Deserialize(ref SpanReader reader)
-    {
-        var equipmentSlot = reader.ReadByte();
-
-        return new DisplayUnequipArgs
-        {
-            EquipmentSlot = (EquipmentSlot)equipmentSlot
-        };
-    }
+    public override DisplayUnequipArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, DisplayUnequipArgs args) => writer.WriteByte((byte)args.EquipmentSlot);

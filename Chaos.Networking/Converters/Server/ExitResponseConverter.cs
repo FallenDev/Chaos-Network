@@ -14,17 +14,7 @@ public sealed class ExitResponseConverter : PacketConverterBase<ExitResponseArgs
     public override byte OpCode => (byte)ServerOpCode.ExitResponse;
 
     /// <inheritdoc />
-    public override ExitResponseArgs Deserialize(ref SpanReader reader)
-    {
-        var exitConfirmed = reader.ReadBoolean();
-
-        //_ = reader.ReadBytes(2); LI: what does this do?
-
-        return new ExitResponseArgs
-        {
-            ExitConfirmed = exitConfirmed
-        };
-    }
+    public override ExitResponseArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, ExitResponseArgs args)

@@ -16,40 +16,7 @@ public sealed class WorldMapConverter : PacketConverterBase<WorldMapArgs>
     public override byte OpCode => (byte)ServerOpCode.WorldMap;
 
     /// <inheritdoc />
-    public override WorldMapArgs Deserialize(ref SpanReader reader)
-    {
-        var fieldName = reader.ReadString();
-        var nodeCount = reader.ReadByte();
-        var fieldIndex = reader.ReadByte();
-
-        var nodes = new List<WorldMapNodeInfo>(nodeCount);
-
-        for (var i = 0; i < nodeCount; i++)
-        {
-            var screenPosition = reader.ReadPoint16();
-            var text = reader.ReadString();
-            var checkSum = reader.ReadUInt16();
-            var mapId = reader.ReadUInt16();
-            var destinationPoint = reader.ReadPoint16();
-
-            nodes.Add(
-                new WorldMapNodeInfo
-                {
-                    ScreenPosition = (Point)screenPosition,
-                    Text = text,
-                    CheckSum = checkSum,
-                    MapId = mapId,
-                    DestinationPoint = destinationPoint
-                });
-        }
-
-        return new WorldMapArgs
-        {
-            FieldName = fieldName,
-            Nodes = nodes,
-            FieldIndex = fieldIndex
-        };
-    }
+    public override WorldMapArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, WorldMapArgs args)

@@ -14,22 +14,7 @@ public sealed class AddSkillToPaneConverter : PacketConverterBase<AddSkillToPane
     public override byte OpCode => (byte)ServerOpCode.AddSkillToPane;
 
     /// <inheritdoc />
-    public override AddSkillToPaneArgs Deserialize(ref SpanReader reader)
-    {
-        var slot = reader.ReadByte();
-        var sprite = reader.ReadUInt16();
-        var panelName = reader.ReadString();
-
-        return new AddSkillToPaneArgs
-        {
-            Skill = new SkillInfo
-            {
-                Slot = slot,
-                Sprite = sprite,
-                PanelName = panelName
-            }
-        };
-    }
+    public override AddSkillToPaneArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, AddSkillToPaneArgs args)

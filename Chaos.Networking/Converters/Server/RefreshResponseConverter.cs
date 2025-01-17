@@ -14,7 +14,7 @@ public class RefreshResponseConverter : PacketConverterBase<RefreshResponseArgs>
     public override byte OpCode => (byte)ServerOpCode.RefreshResponse;
 
     /// <inheritdoc />
-    public override RefreshResponseArgs Deserialize(ref SpanReader reader) => new();
+    public override RefreshResponseArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, RefreshResponseArgs args) { }

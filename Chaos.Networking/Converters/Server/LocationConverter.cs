@@ -14,16 +14,7 @@ public sealed class LocationConverter : PacketConverterBase<LocationArgs>
     public override byte OpCode => (byte)ServerOpCode.Location;
 
     /// <inheritdoc />
-    public override LocationArgs Deserialize(ref SpanReader reader)
-    {
-        var point = reader.ReadPoint16();
-
-        return new LocationArgs
-        {
-            X = point.X,
-            Y = point.Y
-        };
-    }
+    public override LocationArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, LocationArgs args) => writer.WritePoint16((ushort)args.X, (ushort)args.Y);

@@ -14,26 +14,7 @@ public sealed class MapInfoConverter : PacketConverterBase<MapInfoArgs>
     public override byte OpCode => (byte)ServerOpCode.MapInfo;
 
     /// <inheritdoc />
-    public override MapInfoArgs Deserialize(ref SpanReader reader)
-    {
-        var mapId = reader.ReadInt16();
-        var width = reader.ReadByte();
-        var height = reader.ReadByte();
-        var flags = reader.ReadByte();
-        _ = reader.ReadBytes(2); //LI: what is this for?
-        var checkSum = reader.ReadUInt16();
-        var name = reader.ReadString();
-
-        return new MapInfoArgs
-        {
-            MapId = mapId,
-            Width = width,
-            Height = height,
-            Flags = flags,
-            CheckSum = checkSum,
-            Name = name
-        };
-    }
+    public override MapInfoArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, MapInfoArgs args)

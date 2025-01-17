@@ -14,32 +14,7 @@ public sealed class DoorConverter : PacketConverterBase<DoorArgs>
     public override byte OpCode => (byte)ServerOpCode.Door;
 
     /// <inheritdoc />
-    public override DoorArgs Deserialize(ref SpanReader reader)
-    {
-        var count = reader.ReadByte();
-        var doors = new List<DoorInfo>(count);
-
-        for (var i = 0; i < count; i++)
-        {
-            var point = reader.ReadPoint8();
-            var closed = reader.ReadBoolean();
-            var openRight = reader.ReadBoolean();
-
-            doors.Add(
-                new DoorInfo
-                {
-                    X = point.X,
-                    Y = point.Y,
-                    Closed = closed,
-                    OpenRight = openRight
-                });
-        }
-
-        return new DoorArgs
-        {
-            Doors = doors
-        };
-    }
+    public override DoorArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, DoorArgs args)

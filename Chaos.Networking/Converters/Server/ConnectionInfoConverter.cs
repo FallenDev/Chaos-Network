@@ -14,27 +14,11 @@ public sealed class ConnectionInfoConverter : PacketConverterBase<ConnectionInfo
     public override byte OpCode => (byte)ServerOpCode.ConnectionInfo;
 
     /// <inheritdoc />
-    public override ConnectionInfoArgs Deserialize(ref SpanReader reader)
-    {
-        _ = reader.ReadByte(); //LI: what does this do?
-        var tableCheckSum = reader.ReadUInt32();
-        var seed = reader.ReadByte();
-        var key = reader.ReadString();
-
-        return new ConnectionInfoArgs
-        {
-            TableCheckSum = tableCheckSum,
-            Seed = seed,
-            Key = key
-        };
-    }
+    public override ConnectionInfoArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, ConnectionInfoArgs args)
     {
-        writer.WriteByte(0); //LI: what does this do?
-        writer.WriteUInt32(args.TableCheckSum);
-        writer.WriteByte(args.Seed);
-        writer.WriteString(args.Key);
+        writer.WriteUInt16(args.PortNumber);
     }
 }

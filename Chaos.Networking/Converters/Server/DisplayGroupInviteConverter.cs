@@ -15,60 +15,7 @@ public sealed class DisplayGroupInviteConverter : PacketConverterBase<DisplayGro
     public override byte OpCode => (byte)ServerOpCode.DisplayGroupInvite;
 
     /// <inheritdoc />
-    public override DisplayGroupInviteArgs Deserialize(ref SpanReader reader)
-    {
-        var groupRequestType = (ServerGroupSwitch)reader.ReadByte();
-        var sourceName = reader.ReadString();
-        var groupBoxInfo = default(DisplayGroupBoxInfo);
-
-        if (groupRequestType == ServerGroupSwitch.Invite)
-        {
-            var name = reader.ReadString();
-            var note = reader.ReadString();
-            var minLevel = reader.ReadByte();
-            var maxLevel = reader.ReadByte();
-
-            var maxWarriors = reader.ReadByte();
-            var currentWarriors = reader.ReadByte();
-
-            var maxWizards = reader.ReadByte();
-            var currentWizards = reader.ReadByte();
-
-            var maxMonks = reader.ReadByte();
-            var currentMonks = reader.ReadByte();
-
-            var maxPriests = reader.ReadByte();
-            var currentPriests = reader.ReadByte();
-
-            var maxRogues = reader.ReadByte();
-            var currentRogues = reader.ReadByte();
-
-            groupBoxInfo = new DisplayGroupBoxInfo
-            {
-                Name = name,
-                Note = note,
-                MinLevel = minLevel,
-                MaxLevel = maxLevel,
-                MaxWarriors = maxWarriors,
-                CurrentWarriors = currentWarriors,
-                MaxWizards = maxWizards,
-                CurrentWizards = currentWizards,
-                MaxMonks = maxMonks,
-                CurrentMonks = currentMonks,
-                MaxPriests = maxPriests,
-                CurrentPriests = currentPriests,
-                MaxRogues = maxRogues,
-                CurrentRogues = currentRogues
-            };
-        }
-
-        return new DisplayGroupInviteArgs
-        {
-            ServerGroupSwitch = groupRequestType,
-            SourceName = sourceName,
-            GroupBoxInfo = groupBoxInfo
-        };
-    }
+    public override DisplayGroupInviteArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, DisplayGroupInviteArgs args)

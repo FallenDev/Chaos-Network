@@ -14,7 +14,7 @@ public class MapChangeCompleteConverter : PacketConverterBase<MapChangeCompleteA
     public override byte OpCode => (byte)ServerOpCode.MapChangeComplete;
 
     /// <inheritdoc />
-    public override MapChangeCompleteArgs Deserialize(ref SpanReader reader) => new();
+    public override MapChangeCompleteArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, MapChangeCompleteArgs args) => writer.WriteBytes(0, 0);

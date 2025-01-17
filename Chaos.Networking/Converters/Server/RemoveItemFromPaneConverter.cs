@@ -14,15 +14,7 @@ public sealed class RemoveItemFromPaneConverter : PacketConverterBase<RemoveItem
     public override byte OpCode => (byte)ServerOpCode.RemoveItemFromPane;
 
     /// <inheritdoc />
-    public override RemoveItemFromPaneArgs Deserialize(ref SpanReader reader)
-    {
-        var slot = reader.ReadByte();
-
-        return new RemoveItemFromPaneArgs
-        {
-            Slot = slot
-        };
-    }
+    public override RemoveItemFromPaneArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, RemoveItemFromPaneArgs args) => writer.WriteByte(args.Slot);

@@ -17,21 +17,7 @@ public sealed class CreatureWalkConverter : PacketConverterBase<CreatureWalkArgs
     public override byte OpCode => (byte)ServerOpCode.CreatureWalk;
 
     /// <inheritdoc />
-    public override CreatureWalkArgs Deserialize(ref SpanReader reader)
-    {
-        var sourceId = reader.ReadUInt32();
-        var oldPoint = reader.ReadPoint16();
-        var direction = reader.ReadByte();
-
-        //_ = reader.ReadByte(); //LI: what does this do?
-
-        return new CreatureWalkArgs
-        {
-            SourceId = sourceId,
-            OldPoint = (Point)oldPoint,
-            Direction = (Direction)direction
-        };
-    }
+    public override CreatureWalkArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, CreatureWalkArgs args)

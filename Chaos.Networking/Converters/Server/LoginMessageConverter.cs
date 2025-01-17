@@ -15,17 +15,7 @@ public sealed class LoginMessageConverter : PacketConverterBase<LoginMessageArgs
     public override byte OpCode => (byte)ServerOpCode.LoginMessage;
 
     /// <inheritdoc />
-    public override LoginMessageArgs Deserialize(ref SpanReader reader)
-    {
-        var type = reader.ReadByte();
-        var message = reader.ReadString();
-
-        return new LoginMessageArgs
-        {
-            LoginMessageType = (LoginMessageType)type,
-            Message = message
-        };
-    }
+    public override LoginMessageArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, LoginMessageArgs args)

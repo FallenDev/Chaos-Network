@@ -15,17 +15,7 @@ public sealed class EffectConverter : PacketConverterBase<EffectArgs>
     public override byte OpCode => (byte)ServerOpCode.Effect;
 
     /// <inheritdoc />
-    public override EffectArgs Deserialize(ref SpanReader reader)
-    {
-        var icon = reader.ReadUInt16();
-        var color = reader.ReadByte();
-
-        return new EffectArgs
-        {
-            EffectIcon = (byte)icon,
-            EffectColor = (EffectColor)color
-        };
-    }
+    public override EffectArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, EffectArgs args)

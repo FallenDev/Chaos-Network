@@ -15,17 +15,7 @@ public sealed class ServerMessageConverter : PacketConverterBase<ServerMessageAr
     public override byte OpCode => (byte)ServerOpCode.ServerMessage;
 
     /// <inheritdoc />
-    public override ServerMessageArgs Deserialize(ref SpanReader reader)
-    {
-        var messageType = reader.ReadByte();
-        var message = reader.ReadString();
-
-        return new ServerMessageArgs
-        {
-            ServerMessageType = (ServerMessageType)messageType,
-            Message = message
-        };
-    }
+    public override ServerMessageArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, ServerMessageArgs args)

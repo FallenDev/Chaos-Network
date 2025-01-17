@@ -14,20 +14,7 @@ public sealed class HealthBarConverter : PacketConverterBase<HealthBarArgs>
     public override byte OpCode => (byte)ServerOpCode.HealthBar;
 
     /// <inheritdoc />
-    public override HealthBarArgs Deserialize(ref SpanReader reader)
-    {
-        var sourceId = reader.ReadUInt32();
-        _ = reader.ReadByte(); //LI: what is this for?
-        var healthPercent = reader.ReadByte();
-        var sound = reader.ReadByte();
-
-        return new HealthBarArgs
-        {
-            SourceId = sourceId,
-            HealthPercent = healthPercent,
-            Sound = sound == byte.MaxValue ? null : sound
-        };
-    }
+    public override HealthBarArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, HealthBarArgs args)

@@ -14,19 +14,7 @@ public sealed class CooldownConverter : PacketConverterBase<CooldownArgs>
     public override byte OpCode => (byte)ServerOpCode.Cooldown;
 
     /// <inheritdoc />
-    public override CooldownArgs Deserialize(ref SpanReader reader)
-    {
-        var isSkill = reader.ReadBoolean();
-        var slot = reader.ReadByte();
-        var cooldownSecs = reader.ReadUInt32();
-
-        return new CooldownArgs
-        {
-            IsSkill = isSkill,
-            Slot = slot,
-            CooldownSecs = cooldownSecs
-        };
-    }
+    public override CooldownArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, CooldownArgs args)

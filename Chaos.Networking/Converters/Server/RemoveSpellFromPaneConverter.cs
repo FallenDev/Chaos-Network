@@ -14,15 +14,7 @@ public sealed class RemoveSpellFromPaneConverter : PacketConverterBase<RemoveSpe
     public override byte OpCode => (byte)ServerOpCode.RemoveSpellFromPane;
 
     /// <inheritdoc />
-    public override RemoveSpellFromPaneArgs Deserialize(ref SpanReader reader)
-    {
-        var slot = reader.ReadByte();
-
-        return new RemoveSpellFromPaneArgs
-        {
-            Slot = slot
-        };
-    }
+    public override RemoveSpellFromPaneArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, RemoveSpellFromPaneArgs args) => writer.WriteByte(args.Slot);

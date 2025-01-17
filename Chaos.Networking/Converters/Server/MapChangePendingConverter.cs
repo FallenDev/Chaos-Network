@@ -14,7 +14,7 @@ public class MapChangePendingConverter : PacketConverterBase<MapChangePendingArg
     public override byte OpCode => (byte)ServerOpCode.MapChangePending;
 
     /// <inheritdoc />
-    public override MapChangePendingArgs Deserialize(ref SpanReader reader) => new();
+    public override MapChangePendingArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, MapChangePendingArgs args)

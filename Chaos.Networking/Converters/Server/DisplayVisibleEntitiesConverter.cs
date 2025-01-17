@@ -17,68 +17,7 @@ public sealed class DisplayVisibleEntitiesConverter : PacketConverterBase<Displa
     public override byte OpCode => (byte)ServerOpCode.DisplayVisibleEntities;
 
     /// <inheritdoc />
-    public override DisplayVisibleEntitiesArgs Deserialize(ref SpanReader reader)
-    {
-        var count = reader.ReadUInt16();
-        var visibleObjects = new List<VisibleEntityInfo>(count);
-
-        for (var i = 0; i < count; i++)
-        {
-            var point = reader.ReadPoint16();
-            var id = reader.ReadUInt32();
-            var sprite = reader.ReadUInt16();
-
-            switch (sprite)
-            {
-                case >= NetworkingConstants.ItemSpriteOffset:
-                {
-                    var color = reader.ReadByte();
-                    _ = reader.ReadBytes(2); //LI: what is this for?
-
-                    visibleObjects.Add(
-                        new GroundItemInfo
-                        {
-                            X = point.X,
-                            Y = point.Y,
-                            Id = id,
-                            Sprite = (ushort)(sprite - NetworkingConstants.ItemSpriteOffset),
-                            Color = (DisplayColor)color
-                        });
-
-                    break;
-                }
-                case >= NetworkingConstants.CreatureSpriteOffset:
-                {
-                    _ = reader.ReadBytes(4); //LI: what is this for?
-                    var direction = reader.ReadByte();
-                    _ = reader.ReadByte(); //LI: what is this for?
-                    var creatureType = reader.ReadByte();
-
-                    var creatureInfo = new CreatureInfo
-                    {
-                        X = point.X,
-                        Y = point.Y,
-                        Id = id,
-                        Sprite = (ushort)(sprite - NetworkingConstants.CreatureSpriteOffset),
-                        Direction = (Direction)direction,
-                        CreatureType = (CreatureType)creatureType
-                    };
-
-                    if (creatureInfo.CreatureType == CreatureType.Merchant)
-                        creatureInfo.Name = reader.ReadString();
-
-                    visibleObjects.Add(creatureInfo);
-
-                    break;
-                }
-            }
-        }
-
-        return new DisplayVisibleEntitiesArgs
-        {
-            VisibleObjects = visibleObjects
-        };
-    }
+    public override DisplayVisibleEntitiesArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, DisplayVisibleEntitiesArgs args)

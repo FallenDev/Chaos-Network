@@ -8,11 +8,6 @@ namespace Chaos.Networking.Abstractions;
 public interface ILobbyServer<in TClient> : IServer<TClient> where TClient: IConnectedClient
 {
     /// <summary>
-    ///     Occurs when a client requests the details of available login servers
-    /// </summary>
-    ValueTask OnServerTableRequest(TClient client, in Packet packet);
-
-    /// <summary>
     ///     Occurs when a client requests the encryption details, and a checksum of the details of available login servers
     /// </summary>
     ValueTask OnVersion(TClient client, in Packet packet);

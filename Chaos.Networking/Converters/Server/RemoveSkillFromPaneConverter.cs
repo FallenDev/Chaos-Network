@@ -14,15 +14,7 @@ public sealed class RemoveSkillFromPaneConverter : PacketConverterBase<RemoveSki
     public override byte OpCode => (byte)ServerOpCode.RemoveSkillFromPane;
 
     /// <inheritdoc />
-    public override RemoveSkillFromPaneArgs Deserialize(ref SpanReader reader)
-    {
-        var slot = reader.ReadByte();
-
-        return new RemoveSkillFromPaneArgs
-        {
-            Slot = slot
-        };
-    }
+    public override RemoveSkillFromPaneArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, RemoveSkillFromPaneArgs args) => writer.WriteByte(args.Slot);

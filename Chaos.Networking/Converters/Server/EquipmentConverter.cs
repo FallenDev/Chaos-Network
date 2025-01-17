@@ -16,30 +16,7 @@ public sealed class EquipmentConverter : PacketConverterBase<EquipmentArgs>
     public override byte OpCode => (byte)ServerOpCode.Equipment;
 
     /// <inheritdoc />
-    public override EquipmentArgs Deserialize(ref SpanReader reader)
-    {
-        var slot = reader.ReadByte();
-        var sprite = reader.ReadUInt16();
-        var color = reader.ReadByte();
-        var name = reader.ReadString();
-        _ = reader.ReadByte(); //LI: what is this for?
-        var maxDurability = reader.ReadUInt32();
-        var currentDurability = reader.ReadUInt32();
-
-        return new EquipmentArgs
-        {
-            Slot = (EquipmentSlot)slot,
-            Item = new ItemInfo
-            {
-                Sprite = (ushort)(sprite - NetworkingConstants.ItemSpriteOffset),
-                Color = (DisplayColor)color,
-                Name = name,
-                MaxDurability = (int)maxDurability,
-                CurrentDurability = (int)currentDurability,
-                Slot = slot
-            }
-        };
-    }
+    public override EquipmentArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, EquipmentArgs args)

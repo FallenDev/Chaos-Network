@@ -14,15 +14,7 @@ public sealed class SynchronizeTicksResponseConverter : PacketConverterBase<Sync
     public override byte OpCode => (byte)ServerOpCode.SynchronizeTicksResponse;
 
     /// <inheritdoc />
-    public override SynchronizeTicksResponseArgs Deserialize(ref SpanReader reader)
-    {
-        var ticks = reader.ReadInt32();
-
-        return new SynchronizeTicksResponseArgs
-        {
-            Ticks = ticks
-        };
-    }
+    public override SynchronizeTicksResponseArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, SynchronizeTicksResponseArgs responseArgs)

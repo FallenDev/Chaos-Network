@@ -15,30 +15,7 @@ public sealed class RedirectConverter : PacketConverterBase<RedirectArgs>
     public override byte OpCode => (byte)ServerOpCode.Redirect;
 
     /// <inheritdoc />
-    public override RedirectArgs Deserialize(ref SpanReader reader)
-    {
-        var address = reader.ReadBytes(4);
-        var port = reader.ReadUInt16();
-
-        _ = reader.ReadByte(); //remaining bytes in packet
-        var seed = reader.ReadByte();
-        var key = reader.ReadString();
-        var name = reader.ReadString();
-        var id = reader.ReadUInt32();
-
-        return new RedirectArgs
-        {
-            EndPoint = new IPEndPoint(
-                new IPAddress(
-                    address.Reverse()
-                           .ToArray()),
-                port),
-            Seed = seed,
-            Key = key,
-            Name = name,
-            Id = id
-        };
-    }
+    public override RedirectArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, RedirectArgs args)

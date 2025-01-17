@@ -16,23 +16,7 @@ public sealed class UserIdConverter : PacketConverterBase<UserIdArgs>
     public override byte OpCode => (byte)ServerOpCode.UserId;
 
     /// <inheritdoc />
-    public override UserIdArgs Deserialize(ref SpanReader reader)
-    {
-        var id = reader.ReadUInt32();
-        var direction = reader.ReadByte();
-        _ = reader.ReadByte(); //LI: what is this for?
-        var baseClass = reader.ReadByte();
-        _ = reader.ReadByte(); //LI: what is this for?
-        _ = reader.ReadByte(); //LI: what is this for?
-        _ = reader.ReadByte(); //LI: what is this for?
-
-        return new UserIdArgs
-        {
-            Id = id,
-            Direction = (Direction)direction,
-            BaseClass = (BaseClass)baseClass
-        };
-    }
+    public override UserIdArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, UserIdArgs args)

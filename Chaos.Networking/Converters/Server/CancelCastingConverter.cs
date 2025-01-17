@@ -14,7 +14,7 @@ public class CancelCastingConverter : PacketConverterBase<CancelCastingArgs>
     public override byte OpCode => (byte)ServerOpCode.CancelCasting;
 
     /// <inheritdoc />
-    public override CancelCastingArgs Deserialize(ref SpanReader reader) => new();
+    public override CancelCastingArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, CancelCastingArgs args) { }

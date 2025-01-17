@@ -15,17 +15,7 @@ public sealed class CreatureTurnConverter : PacketConverterBase<CreatureTurnArgs
     public override byte OpCode => (byte)ServerOpCode.CreatureTurn;
 
     /// <inheritdoc />
-    public override CreatureTurnArgs Deserialize(ref SpanReader reader)
-    {
-        var sourceId = reader.ReadUInt32();
-        var direction = reader.ReadByte();
-
-        return new CreatureTurnArgs
-        {
-            SourceId = sourceId,
-            Direction = (Direction)direction
-        };
-    }
+    public override CreatureTurnArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, CreatureTurnArgs args)

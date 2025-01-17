@@ -15,19 +15,7 @@ public sealed class DisplayPublicMessageConverter : PacketConverterBase<DisplayP
     public override byte OpCode => (byte)ServerOpCode.DisplayPublicMessage;
 
     /// <inheritdoc />
-    public override DisplayPublicMessageArgs Deserialize(ref SpanReader reader)
-    {
-        var messageType = reader.ReadByte();
-        var sourceId = reader.ReadUInt32();
-        var message = reader.ReadString();
-
-        return new DisplayPublicMessageArgs
-        {
-            PublicMessageType = (PublicMessageType)messageType,
-            SourceId = sourceId,
-            Message = message
-        };
-    }
+    public override DisplayPublicMessageArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, DisplayPublicMessageArgs args)

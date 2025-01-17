@@ -15,28 +15,7 @@ public sealed class AddSpellToPaneConverter : PacketConverterBase<AddSpellToPane
     public override byte OpCode => (byte)ServerOpCode.AddSpellToPane;
 
     /// <inheritdoc />
-    public override AddSpellToPaneArgs Deserialize(ref SpanReader reader)
-    {
-        var slot = reader.ReadByte();
-        var sprite = reader.ReadUInt16();
-        var spellType = reader.ReadByte();
-        var panelName = reader.ReadString();
-        var prompt = reader.ReadString();
-        var castLines = reader.ReadByte();
-
-        return new AddSpellToPaneArgs
-        {
-            Spell = new SpellInfo
-            {
-                Slot = slot,
-                Sprite = sprite,
-                SpellType = (SpellType)spellType,
-                PanelName = panelName,
-                Prompt = prompt,
-                CastLines = castLines
-            }
-        };
-    }
+    public override AddSpellToPaneArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, AddSpellToPaneArgs args)

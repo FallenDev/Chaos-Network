@@ -15,56 +15,7 @@ public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
     public override byte OpCode => (byte)ServerOpCode.SelfProfile;
 
     /// <inheritdoc />
-    public override SelfProfileArgs Deserialize(ref SpanReader reader)
-    {
-        var nation = reader.ReadByte();
-        var guildRank = reader.ReadString();
-        var title = reader.ReadString();
-        var groupString = reader.ReadString();
-        var groupOpen = reader.ReadBoolean();
-        var groupBox = reader.ReadBoolean();
-
-        //TODO: read groupbox shit
-        var baseClass = reader.ReadByte();
-        var enableMasterAbilitityMetadata = reader.ReadBoolean();
-        var enableMasterQuestMetadata = reader.ReadBoolean();
-        var displayClass = reader.ReadString();
-        var guildName = reader.ReadString();
-        var legendMarkCount = reader.ReadByte();
-        var legendMarks = new List<LegendMarkInfo>(legendMarkCount);
-
-        for (var i = 0; i < legendMarkCount; i++)
-        {
-            var icon = reader.ReadByte();
-            var color = reader.ReadByte();
-            var key = reader.ReadString();
-            var text = reader.ReadString();
-
-            legendMarks.Add(
-                new LegendMarkInfo
-                {
-                    Icon = (MarkIcon)icon,
-                    Color = (MarkColor)color,
-                    Key = key,
-                    Text = text
-                });
-        }
-
-        return new SelfProfileArgs
-        {
-            Nation = (Nation)nation,
-            GuildRank = guildRank,
-            Title = title,
-            GroupString = groupString,
-            GroupOpen = groupOpen,
-            BaseClass = (BaseClass)baseClass,
-            EnableMasterAbilityMetaData = enableMasterAbilitityMetadata,
-            EnableMasterQuestMetaData = enableMasterQuestMetadata,
-            DisplayClass = displayClass,
-            GuildName = guildName,
-            LegendMarks = legendMarks
-        };
-    }
+    public override SelfProfileArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, SelfProfileArgs args)

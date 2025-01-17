@@ -15,39 +15,7 @@ public sealed class AnimationConverter : PacketConverterBase<AnimationArgs>
     public override byte OpCode => (byte)ServerOpCode.Animation;
 
     /// <inheritdoc />
-    public override AnimationArgs Deserialize(ref SpanReader reader)
-    {
-        var targetId = reader.ReadUInt32();
-
-        if (targetId == 0)
-        {
-            var targetAnimation = reader.ReadUInt16();
-            var animationSpeed = reader.ReadUInt16();
-            var targetPoints = reader.ReadPoint16();
-
-            return new AnimationArgs
-            {
-                TargetAnimation = targetAnimation,
-                AnimationSpeed = animationSpeed,
-                TargetPoint = targetPoints
-            };
-        } else
-        {
-            var sourceId = reader.ReadUInt32();
-            var targetAnimation = reader.ReadUInt16();
-            var sourceAnimation = reader.ReadUInt16();
-            var animationSpeed = reader.ReadUInt16();
-
-            return new AnimationArgs
-            {
-                TargetId = targetId,
-                SourceId = sourceId,
-                TargetAnimation = targetAnimation,
-                SourceAnimation = sourceAnimation,
-                AnimationSpeed = animationSpeed
-            };
-        }
-    }
+    public override AnimationArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, AnimationArgs args)

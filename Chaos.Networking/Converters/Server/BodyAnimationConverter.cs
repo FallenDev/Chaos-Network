@@ -15,21 +15,7 @@ public sealed class BodyAnimationConverter : PacketConverterBase<BodyAnimationAr
     public override byte OpCode => (byte)ServerOpCode.BodyAnimation;
 
     /// <inheritdoc />
-    public override BodyAnimationArgs Deserialize(ref SpanReader reader)
-    {
-        var sourceId = reader.ReadUInt32();
-        var bodyAnimation = reader.ReadByte();
-        var animationSpeed = reader.ReadUInt16();
-        var sound = reader.ReadByte();
-
-        return new BodyAnimationArgs
-        {
-            SourceId = sourceId,
-            BodyAnimation = (BodyAnimation)bodyAnimation,
-            AnimationSpeed = animationSpeed,
-            Sound = sound == byte.MaxValue ? null : sound
-        };
-    }
+    public override BodyAnimationArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, BodyAnimationArgs args)

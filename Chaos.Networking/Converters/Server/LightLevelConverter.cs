@@ -15,15 +15,7 @@ public sealed class LightLevelConverter : PacketConverterBase<LightLevelArgs>
     public override byte OpCode => (byte)ServerOpCode.LightLevel;
 
     /// <inheritdoc />
-    public override LightLevelArgs Deserialize(ref SpanReader reader)
-    {
-        var lightLevel = reader.ReadByte();
-
-        return new LightLevelArgs
-        {
-            LightLevel = (LightLevel)lightLevel
-        };
-    }
+    public override LightLevelArgs Deserialize(ref SpanReader reader) => null;
 
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, LightLevelArgs args) => writer.WriteByte((byte)args.LightLevel);
