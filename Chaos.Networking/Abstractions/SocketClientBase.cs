@@ -167,11 +167,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                     await ProcessDecryptedData(bytesRead).ConfigureAwait(false);
                 }
                 else
-                {
-                    Logger.LogWarning("Client has been disconnected. {RemoteIp}", RemoteIp);
-                    Disconnect();
                     break;
-                }
             }
         }
         catch (Exception ex)

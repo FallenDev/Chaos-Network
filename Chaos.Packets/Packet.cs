@@ -28,13 +28,11 @@ namespace Chaos.Packets
 
             // Extract length (big-endian)
             var payloadLength = (span[1] << 8) | span[2];
-            Console.Write($"Extracted Length: {Length}, Span Length: {payloadLength}", payloadLength, span.Length);
 
             // Validate total packet size
             if (span.Length != 5 + payloadLength)
             {
-                throw new ArgumentException(
-                    $"Span length ({span.Length}) does not match the total packet size (5 + {payloadLength}).");
+                throw new ArgumentException($"Span length ({span.Length}) does not match the total packet size (5 + {payloadLength}).");
             }
 
             OpCode = span[3];

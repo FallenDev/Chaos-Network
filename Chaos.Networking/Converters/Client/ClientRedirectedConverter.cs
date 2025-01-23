@@ -16,26 +16,11 @@ public sealed class ClientRedirectedConverter : PacketConverterBase<ClientRedire
     /// <inheritdoc />
     public override ClientRedirectedArgs Deserialize(ref SpanReader reader)
     {
-        var seed = reader.ReadByte();
-        var key = reader.ReadString();
-        var name = reader.ReadString();
-        var id = reader.ReadUInt32();
+        var message = reader.ReadString();
 
         return new ClientRedirectedArgs
         {
-            Seed = seed,
-            Key = key,
-            Name = name,
-            Id = id
+            Message = message
         };
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, ClientRedirectedArgs args)
-    {
-        writer.WriteByte(args.Seed);
-        writer.WriteString(args.Key);
-        writer.WriteString(args.Name);
-        writer.WriteUInt32(args.Id);
     }
 }

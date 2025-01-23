@@ -20,7 +20,7 @@ public abstract class PacketConverterBase<T> : IPacketConverter<T> where T: IPac
     public abstract T Deserialize(ref SpanReader reader);
 
     /// <inheritdoc />
-    public abstract void Serialize(ref SpanWriter writer, T args);
+    public virtual void Serialize(ref SpanWriter writer, T args) { }
 
     /// <inheritdoc />
     void IPacketConverter.Serialize(ref SpanWriter writer, object args) => Serialize(ref writer, (T)args);

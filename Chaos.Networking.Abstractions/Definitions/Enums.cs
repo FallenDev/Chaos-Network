@@ -9,12 +9,8 @@
 /// </remarks>
 public enum ClientOpCode : byte
 {
-    /// <summary>
-    ///     OpCode used when a client requests the encryption details, and a checksum of the details of available login servers
-    ///     <br />
-    ///     Hex value: 0x00
-    /// </summary>
-    Version = 0,
+    Version = 0x0A,
+    ClientRedirected = 0x0B,
 
     /// <summary>
     ///     Opcode used when a client requests to create a new character. This is the first step in the process and will only
@@ -72,7 +68,7 @@ public enum ClientOpCode : byte
     ///     <br />
     ///     Hex value: 0x0B
     /// </summary>
-    ExitRequest = 11,
+    ExitRequest = 250,
 
     /// <summary>
     ///     OpCode used when a client requests the server to display an object
@@ -101,13 +97,6 @@ public enum ClientOpCode : byte
     ///     Hex value: 0x0F
     /// </summary>
     SpellUse = 15,
-
-    /// <summary>
-    ///     OpCode used when a client is redirected to this server
-    ///     <br />
-    ///     Hex value: 0x10
-    /// </summary>
-    ClientRedirected = 16,
 
     /// <summary>
     ///     OpCode used when a client changes their character's direction
