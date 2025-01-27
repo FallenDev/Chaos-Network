@@ -190,24 +190,19 @@ public enum LoginMessageType : byte
     Confirm = 0,
 
     /// <summary>
-    ///     Clears the name field during character creation and presents a message with an ok button
+    ///     Clears the password fields on login and presents a message with an ok button
     /// </summary>
-    ClearNameMessage = 3,
+    WrongPassword = 1,
 
     /// <summary>
-    ///     Clears the password field during character creation and presents a message with an ok button
+    ///     Clears the name fields and presents a message with an ok button
     /// </summary>
-    ClearPswdMessage = 5,
+    CheckName = 2,
 
     /// <summary>
-    ///     Clears the name and password fields on the login screen and presents a message with an ok button
+    ///     Clears the passwords fields and presents a message with an ok button
     /// </summary>
-    CharacterDoesntExist = 14,
-
-    /// <summary>
-    ///     Clears the password fields on the login screen and presents a message with an ok button
-    /// </summary>
-    WrongPassword = 15
+    CheckPassword = 3
 }
 
 /// <summary>

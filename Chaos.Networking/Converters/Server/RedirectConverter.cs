@@ -20,12 +20,6 @@ public sealed class RedirectConverter : PacketConverterBase<RedirectArgs>
     /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, RedirectArgs args)
     {
-        writer.WriteBytes(
-            args.EndPoint
-                .Address
-                .GetAddressBytes()
-                .Reverse()
-                .ToArray());
         writer.WriteUInt16((ushort)args.EndPoint.Port);
 
         var remaining = args.Key.Length;
