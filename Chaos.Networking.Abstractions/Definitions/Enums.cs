@@ -11,6 +11,7 @@ public enum ClientOpCode : byte
 {
     Version = 0x0A,
     ClientRedirected = 0x0B,
+    OnClientLogin = 0x01,
 
     /// <summary>
     ///     Opcode used when a client requests to create a new character. This is the first step in the process and will only
@@ -19,14 +20,7 @@ public enum ClientOpCode : byte
     ///     Hex value: 0x02
     /// </summary>
     CreateCharInitial = 2,
-
-    /// <summary>
-    ///     OpCode used when a client provides credentials to log into the world
-    ///     <br />
-    ///     Hex value: 0x03
-    /// </summary>
-    Login = 3,
-
+    
     /// <summary>
     ///     OpCode used when a client requests to create a new character. This is the second step in the process and will
     ///     contain appearance details
