@@ -5,6 +5,7 @@ using Chaos.Common.Synchronization;
 using Chaos.Extensions.Common;
 using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
+using Chaos.Networking.Entities.Server;
 using Chaos.Networking.Options;
 using Chaos.NLog.Logging.Definitions;
 using Chaos.NLog.Logging.Extensions;
@@ -275,6 +276,34 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     }
 
     /// <summary>
+    /// Provides a set of argument type names that are used for real-time event handling within the system.
+    /// </summary>
+    /// <remarks>This collection includes the names of argument types relevant to various real-time
+    /// operations, such as client actions, item interactions, and system events. It can be used to identify or filter
+    /// supported real-time argument types when processing events.
+    /// </remarks>
+    private static readonly HashSet<string> RealTimeArgTypeNames =
+    [
+        nameof(MapDataArgs),
+        nameof(ClientWalkArgs),
+        nameof(PickupArgs),
+        nameof(ItemDropArgs),
+        nameof(ExitRequestArgs),
+        nameof(ClientRedirectedArgs),
+        nameof(TurnArgs),
+        nameof(ItemUseArgs),
+        nameof(GoldDropArgs),
+        nameof(ItemDroppedOnCreatureArgs),
+        nameof(GoldDroppedOnCreatureArgs),
+        nameof(SwapSlotArgs),
+        nameof(UnequipArgs),
+        nameof(HeartBeatArgs),
+        nameof(RaiseStatArgs),
+        nameof(ExchangeInteractionArgs),
+        nameof(MetaDataRequestArgs)
+    ];
+
+    /// <summary>
     /// Executes an asynchronous action for a client within a synchronized context.
     /// </summary>
     /// <param name="client">The client to execute the action against</param>
@@ -283,47 +312,22 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        // List of real-time args
-        var validArgsTypes = new HashSet<string>
-        {
-            "MapDataArgs",
-            "ClientWalkArgs",
-            "PickupArgs",
-            "ItemDropArgs",
-            "ExitRequestArgs",
-            "ClientRedirectedArgs",
-            "TurnArgs",
-            "ItemUseArgs",
-            "GoldDropArgs",
-            "ItemDroppedOnCreatureArgs",
-            "GoldDroppedOnCreatureArgs",
-            "SwapSlotArgs",
-            "UnequipArgs",
-            "HeartBeatArgs",
-            "RaiseStatArgs",
-            "ExchangeInteractionArgs",
-            "MetaDataRequestArgs"
-        };
-
-        // Check if the args can execute in real-time
-        if (validArgsTypes.Contains(args.GetType().Name))
+        if (RealTimeArgTypeNames.Contains(args.GetType().Name))
         {
             await TryExecuteActionWithArgs(client, args, action);
+            return;
         }
-        else
+
+        // Lower priority -> Sync + contention handling
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
+
+        if (@lock == null)
         {
-            // Wait for lock if packets are lower priority
-            await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
-
-            // If no lock could be acquired, log the information and return
-            if (@lock == null)
-            {
-                Logger.LogInformation($"Contention on {action.Method.Name}");
-                return;
-            }
-
-            await TryExecuteActionWithArgs(client, args, action);
+            Logger.LogInformation($"Contention on {action.Method.Name}");
+            return;
         }
+
+        await TryExecuteActionWithArgs(client, args, action);
     }
 
     /// <summary>
