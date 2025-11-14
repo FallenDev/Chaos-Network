@@ -150,7 +150,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         Logger.WithTopics(Topics.Actions.Listening)
               .LogInformation("Listening on {@EndPoint}", endPoint.Port.ToString());
 
-        Socket.BeginAccept(OnConnection, Socket);
+        StartAcceptLoop();
 
         await stoppingToken.WaitTillCanceled();
 
@@ -163,7 +163,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
             //ignored
         }
 
-        await Parallel.ForEachAsync(ClientRegistry, stoppingToken, (client, _) =>
+        await Parallel.ForEachAsync(ClientRegistry, stoppingToken, static (client, _) =>
         {
             try
             {
@@ -248,7 +248,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         }
 
         // If the connection count exceeds the maximum allowed, reject the connection
-        if (connectionData.Count >= MaxConnectionsPerMinute) return false;        
+        if (connectionData.Count >= MaxConnectionsPerMinute) return false;
 
         // Otherwise, increment the count and allow the connection
         ConnectionAttempts[ipAddress] = (connectionData.Count + 1, connectionData.LastConnection);
@@ -425,4 +425,47 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         // Enable TCP keep-alive to detect stale connections
         tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
     }
+
+    private readonly SocketAsyncEventArgs _acceptArgs = new();
+
+    private void StartAcceptLoop()
+    {
+        _acceptArgs.Completed += OnAcceptCompleted;
+        if (!Socket.AcceptAsync(_acceptArgs))
+            OnAcceptCompleted(Socket, _acceptArgs);
+    }
+
+    private void OnAcceptCompleted(object? sender, SocketAsyncEventArgs e)
+    {
+        var clientSocket = e.AcceptSocket;
+        e.AcceptSocket = null;
+
+        if (clientSocket != null)
+        {
+            try
+            {
+                if (clientSocket.Connected)
+                {
+                    var ipAddress = ((IPEndPoint)clientSocket.RemoteEndPoint!).Address.ToString();
+                    if (IsConnectionAllowed(ipAddress))
+                    {
+                        ConfigureTcpSocket(clientSocket);
+                        OnConnected(clientSocket);
+                    }
+                    else
+                    {
+                        clientSocket.Close();
+                    }
+                }
+            }
+            catch
+            {
+                try { clientSocket?.Close(); } catch { }
+            }
+        }
+
+        if (!Socket.AcceptAsync(e))
+            OnAcceptCompleted(Socket, e);
+    }
+
 }

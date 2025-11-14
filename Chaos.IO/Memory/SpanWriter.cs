@@ -1,6 +1,8 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
+
 using Chaos.IO.Definitions;
 
 namespace Chaos.IO.Memory;
@@ -150,7 +152,7 @@ public ref struct SpanWriter
     /// <param name="value">
     ///     The value to write.
     /// </param>
-    public void WriteValue<T>(T value) where T: unmanaged
+    public void WriteValue<T>(T value) where T : unmanaged
     {
         switch (value)
         {

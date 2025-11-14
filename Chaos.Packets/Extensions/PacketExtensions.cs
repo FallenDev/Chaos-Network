@@ -1,63 +1,48 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+
 using Chaos.Extensions.Common;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
+
 using Microsoft.Extensions.DependencyInjection;
 
-// ReSharper disable once CheckNamespace
 namespace Chaos.Extensions.DependencyInjection;
 
 /// <summary>
-///     <see cref="Chaos.Packets" /> DI extensions
+/// Dependency injection helpers for registering packet serialization.
 /// </summary>
 [ExcludeFromCodeCoverage]
 public static class PacketExtensions
 {
     /// <summary>
-    ///     Adds <see cref="Chaos.Packets.PacketSerializer" /> as a singleton implementation of
-    ///     <see cref="Chaos.Packets.Abstractions.IPacketSerializer" /> to the service collction
+    /// Registers <see cref="PacketSerializer"/> and all <see cref="IPacketConverter"/> implementations
+    /// using reflection-based discovery.
     /// </summary>
-    /// <param name="serviceCollection">
-    ///     The service collectionto add to
-    /// </param>
-    /// <remarks>
-    ///     This extension scans all loaded assemblies for types that implement of <see cref="IPacketConverter" />. It
-    ///     initializes instances of all of these types through <see cref="System.Activator" />.
-    ///     <see cref="System.Activator.CreateInstance(Type)" /> and uses the types and objects as parameters for the
-    ///     <see cref="Chaos.Packets.PacketSerializer" /> constructor.
-    /// </remarks>
-    public static void AddPacketSerializer(this IServiceCollection serviceCollection)
-        => serviceCollection.AddSingleton<IPacketSerializer, PacketSerializer>(
-            _ =>
-            {
-                var converters = LoadConvertersFromAssembly();
-                var serializer = new PacketSerializer(Encoding.GetEncoding(949), converters);
-
-                return serializer;
-            });
-
-    private static Dictionary<Type, IPacketConverter> LoadConvertersFromAssembly()
+    public static void AddPacketSerializer(this IServiceCollection services)
     {
-        var ret = new Dictionary<Type, IPacketConverter>();
-
-        var deserializers = typeof(IPacketConverter).LoadImplementations()
-                                                    .Select(asmType => (IPacketConverter)Activator.CreateInstance(asmType)!)
-                                                    .ToArray();
-
-        foreach (var deserializer in deserializers)
+        services.AddSingleton<IPacketSerializer>(sp =>
         {
-            var type = deserializer.GetType()
-                                   .GetInterfaces()
-                                   .Where(i => i.IsGenericType)
-                                   .First(i => i.GetGenericTypeDefinition() == typeof(IPacketConverter<>));
+            var converters = LoadConverters(sp);
+            return new PacketSerializer(converters, Encoding.GetEncoding(949));
+        });
+    }
 
-            var typeParam = type.GetGenericArguments()
-                                .First();
+    private static IReadOnlyList<IPacketConverter> LoadConverters(IServiceProvider sp)
+    {
+        // Load once and materialize
+        var converterTypes = typeof(IPacketConverter)
+            .LoadImplementations()
+            .ToArray();
 
-            ret.TryAdd(typeParam, deserializer);
+        var list = new List<IPacketConverter>(converterTypes.Length);
+
+        foreach (var type in converterTypes)
+        {
+            var instance = (IPacketConverter)ActivatorUtilities.CreateInstance(sp, type);
+            list.Add(instance);
         }
 
-        return ret;
+        return list;
     }
 }

@@ -1,5 +1,6 @@
-﻿﻿using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
+
 using Chaos.Cryptography.Abstractions;
 using Chaos.Cryptography.Abstractions.Definitions;
 
@@ -52,9 +53,7 @@ public sealed class Crypto : ICrypto
     {
         Seed = seed;
         KeySalts = GenerateKeySalts(keySaltSeed);
-
-        var a = (ushort)Random.Shared.Next(256, ushort.MaxValue);
-        var b = (byte)Random.Shared.Next(100, byte.MaxValue);
+        FillCryptoSeed(out var a, out var b);
         Key = GenerateKey(a, b);
     }
 
@@ -86,6 +85,16 @@ public sealed class Crypto : ICrypto
         => BitConverter.ToString(MD5.HashData(Encoding.ASCII.GetBytes(value)))
                        .Replace("-", string.Empty)
                        .ToLower();
+
+    private static void FillCryptoSeed(out ushort a, out byte b)
+    {
+        Span<byte> tmp = stackalloc byte[3];
+        RandomNumberGenerator.Fill(tmp);
+        a = (ushort)(256 + ((tmp[0] << 8) | tmp[1])); // ensure >= 256
+        if (a == 0) a = 256;
+        b = (byte)(100 + (tmp[2] % (byte.MaxValue - 100))); // ensure >= 100
+        if (b == 0) b = 100;
+    }
     #endregion
 
     #region Client Encryption
@@ -100,35 +109,33 @@ public sealed class Crypto : ICrypto
     public EncryptionType GetClientEncryptionType(byte opCode)
         => opCode switch
         {
-            0   => EncryptionType.None,
-            16  => EncryptionType.None,
-            72  => EncryptionType.None,
-            2   => EncryptionType.Normal,
-            3   => EncryptionType.Normal,
-            4   => EncryptionType.Normal,
-            11  => EncryptionType.Normal,
-            38  => EncryptionType.Normal,
-            45  => EncryptionType.Normal,
-            58  => EncryptionType.Normal,
-            66  => EncryptionType.Normal,
-            67  => EncryptionType.Normal,
-            75  => EncryptionType.Normal,
-            87  => EncryptionType.Normal,
-            98  => EncryptionType.Normal,
+            0 => EncryptionType.None,
+            16 => EncryptionType.None,
+            72 => EncryptionType.None,
+            2 => EncryptionType.Normal,
+            3 => EncryptionType.Normal,
+            4 => EncryptionType.Normal,
+            11 => EncryptionType.Normal,
+            38 => EncryptionType.Normal,
+            45 => EncryptionType.Normal,
+            58 => EncryptionType.Normal,
+            66 => EncryptionType.Normal,
+            67 => EncryptionType.Normal,
+            75 => EncryptionType.Normal,
+            87 => EncryptionType.Normal,
+            98 => EncryptionType.Normal,
             104 => EncryptionType.Normal,
             113 => EncryptionType.Normal,
             115 => EncryptionType.Normal,
             123 => EncryptionType.Normal,
-            _   => EncryptionType.MD5
+            _ => EncryptionType.MD5
         };
 
     /// <inheritdoc />
     public void GenerateEncryptionParameters()
     {
-        Seed = (byte)Random.Shared.Next(0, 10);
-
-        var a = (ushort)Random.Shared.Next(256, ushort.MaxValue);
-        var b = (byte)Random.Shared.Next(100, byte.MaxValue);
+        Seed = (byte)(RandomNumberGenerator.GetInt32(0, 10));
+        FillCryptoSeed(out var a, out var b);
         Key = GenerateKey(a, b);
     }
 
@@ -175,11 +182,8 @@ public sealed class Crypto : ICrypto
     public void ClientEncrypt(ref Span<byte> buffer, byte opcode, byte sequence)
     {
         if (opcode is 57 or 58)
-            EncryptDialog(ref buffer);
-
-        byte[] thisKey;
-        var a = (ushort)Random.Shared.Next(256, ushort.MaxValue);
-        var b = (byte)Random.Shared.Next(100, byte.MaxValue);
+            EncryptDialog(ref buffer); byte[] thisKey;
+        FillCryptoSeed(out var a, out var b);
         var type = GetClientEncryptionType(opcode);
         var resultLength = buffer.Length + 8;
         var position = buffer.Length + 1;
@@ -242,10 +246,8 @@ public sealed class Crypto : ICrypto
     public void ServerEncrypt(ref Span<byte> buffer, byte opCode, byte sequence)
     {
         IReadOnlyList<byte> thisKey;
-        var a = (ushort)Random.Shared.Next(256, ushort.MaxValue);
-        var b = (byte)Random.Shared.Next(100, byte.MaxValue);
         var type = GetServerEncryptionType(opCode);
-
+        FillCryptoSeed(out var a, out var b);
         switch (type)
         {
             case EncryptionType.Normal:
@@ -388,19 +390,19 @@ public sealed class Crypto : ICrypto
     public EncryptionType GetServerEncryptionType(byte opCode)
         => opCode switch
         {
-            0   => EncryptionType.None,
-            3   => EncryptionType.None,
-            64  => EncryptionType.None,
+            0 => EncryptionType.None,
+            3 => EncryptionType.None,
+            64 => EncryptionType.None,
             126 => EncryptionType.None,
-            1   => EncryptionType.Normal,
-            2   => EncryptionType.Normal,
-            10  => EncryptionType.Normal,
-            86  => EncryptionType.Normal,
-            96  => EncryptionType.Normal,
-            98  => EncryptionType.Normal,
+            1 => EncryptionType.Normal,
+            2 => EncryptionType.Normal,
+            10 => EncryptionType.Normal,
+            86 => EncryptionType.Normal,
+            96 => EncryptionType.Normal,
+            98 => EncryptionType.Normal,
             102 => EncryptionType.Normal,
             111 => EncryptionType.Normal,
-            _   => EncryptionType.MD5
+            _ => EncryptionType.MD5
         };
     #endregion
 }

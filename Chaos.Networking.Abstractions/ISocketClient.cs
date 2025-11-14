@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+
 using Chaos.Common.Synchronization;
 using Chaos.Cryptography.Abstractions;
 using Chaos.Packets;
@@ -43,6 +44,11 @@ public interface ISocketClient
     Socket Socket { get; }
 
     /// <summary>
+    ///     The maximum packet size (bytes) this client will accept.
+    /// </summary>
+    int MaxPacketLength { get; }
+
+    /// <summary>
     ///     Begins an operation that receives data from the socket
     /// </summary>
     void BeginReceive();
@@ -73,7 +79,7 @@ public interface ISocketClient
     ///     The type must inherit <see cref="Chaos.Packets.Abstractions.IPacketSerializable" /> and have a
     ///     <see cref="IPacketConverter{T}" /> created for it
     /// </typeparam>
-    void Send<T>(T obj) where T: IPacketSerializable;
+    void Send<T>(T obj) where T : IPacketSerializable;
 
     /// <summary>
     ///     Sends a packet to the client

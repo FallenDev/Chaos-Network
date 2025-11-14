@@ -1,67 +1,76 @@
 using System.Collections.Frozen;
 using System.Text;
+
 using Chaos.IO.Memory;
 using Chaos.Packets.Abstractions;
 
 namespace Chaos.Packets;
 
 /// <summary>
-///     Provides serialization and deserialization of packets.
+/// Serializes/deserializes packet payloads.
+/// Framing is handled exclusively by <see cref="Packet.ToSpan()"/>.
 /// </summary>
 public sealed class PacketSerializer : IPacketSerializer
 {
-    private readonly FrozenDictionary<Type, IPacketConverter> Converters;
+    private readonly FrozenDictionary<byte, IPacketConverter> _byOpCode;
+    private readonly FrozenDictionary<Type, IPacketConverter> _byType;
 
-    /// <inheritdoc />
     public Encoding Encoding { get; }
 
-    /// <summary>
-    ///     Initializes a new instance of the <see cref="PacketSerializer" /> class.
-    /// </summary>
-    /// <param name="encoding">
-    ///     The encoding to use when writing and reading strings
-    /// </param>
-    /// <param name="converters">
-    ///     A map of types to serialize/deserialize and their associated converters
-    /// </param>
-    public PacketSerializer(Encoding encoding, IDictionary<Type, IPacketConverter> converters)
+    public PacketSerializer(IEnumerable<IPacketConverter> converters, Encoding encoding)
     {
-        Encoding = encoding;
-        Converters = converters.ToFrozenDictionary();
+        Encoding = encoding ?? throw new ArgumentNullException(nameof(encoding));
+
+        var opMap = new Dictionary<byte, IPacketConverter>();
+        var typeMap = new Dictionary<Type, IPacketConverter>();
+
+        foreach (var c in converters)
+        {
+            opMap[c.OpCode] = c;
+
+            var generic = c.GetType()
+                .GetInterfaces()
+                .FirstOrDefault(i =>
+                    i.IsGenericType &&
+                    i.GetGenericTypeDefinition() == typeof(IPacketConverter<>));
+
+            if (generic != null)
+            {
+                var target = generic.GetGenericArguments()[0];
+                typeMap[target] = c;
+            }
+        }
+
+        _byOpCode = opMap.ToFrozenDictionary();
+        _byType = typeMap.ToFrozenDictionary();
     }
 
-    /// <inheritdoc />
-    public T Deserialize<T>(in Packet packet) where T: IPacketSerializable
+    public T Deserialize<T>(in Packet packet) where T : IPacketSerializable
     {
-        var type = typeof(T);
+        if (!_byOpCode.TryGetValue(packet.OpCode, out var converter))
+            throw new InvalidOperationException(
+                $"No converter registered for opcode {packet.OpCode}");
+
         var reader = new SpanReader(Encoding, in packet.Buffer);
 
-        if (!Converters.TryGetValue(type, out var converter) || converter is not IPacketConverter<T> typedConverter)
-            throw new InvalidOperationException($"No converter exists for type \"{type.FullName}\"");
-
-        var ret = typedConverter.Deserialize(ref reader);
-
-        if (ret is ISequencerPacket sequencer)
-            sequencer.Sequence = packet.Sequence;
-
-        return ret;
+        var result = converter.Deserialize(ref reader);
+        return (T)result;
     }
 
-    /// <inheritdoc />
     public Packet Serialize(IPacketSerializable obj)
     {
-        ArgumentNullException.ThrowIfNull(obj);
+        if (!_byType.TryGetValue(obj.GetType(), out var converter))
+            throw new InvalidOperationException(
+                $"No converter registered for type {obj.GetType().FullName}");
 
-        var type = obj.GetType();
-
-        if (!Converters.TryGetValue(type, out var converter))
-            throw new InvalidOperationException($"No converter exists for type \"{type.FullName}\"");
-
-        var packet = new Packet(converter.OpCode);
         var writer = new SpanWriter(Encoding);
         converter.Serialize(ref writer, obj);
+        var payload = writer.ToSpan();
 
-        packet.Buffer = writer.ToSpan();
+        var packet = new Packet(converter.OpCode)
+        {
+            Buffer = payload
+        };
 
         return packet;
     }
