@@ -1,11 +1,7 @@
-using System;
 using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
-using System.Threading.Channels;
-using System.Threading.Tasks;
 
 using Chaos.Common.Identity;
 using Chaos.Common.Synchronization;
@@ -25,17 +21,12 @@ namespace Chaos.Networking.Abstractions;
 /// </summary>
 public abstract class SocketClientBase : ISocketClient, IDisposable
 {
-    private const int DefaultMaxPacketLength = 12 * 1024;      // 12 KB cap (header + payload)
-    private const int DefaultReceiveBufferSize = 32 * 1024;    // 32 KB rolling receive buffer
-    private const int DefaultSendQueueCapacity = 1024;
-
-    private readonly Channel<ReadOnlyMemory<byte>> _sendChannel;
-    private readonly CancellationTokenSource _sendCancellation = new();
-
+    private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
     private int Count;
-    private int Sequence;
 
-    public virtual int MaxPacketLength { get; } = DefaultMaxPacketLength;
+    private const int ReceiveBufferSize = 32 * 1024; // 32 KB rolling buffer
+    public virtual int MaxPacketLength { get; } = 12 * 1024; // 12 KB per packet
+    private int Sequence;
 
     /// <inheritdoc />
     public bool Connected { get; set; }
@@ -79,43 +70,27 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         Id = SequentialIdGenerator<uint>.Shared.NextId;
         Socket = socket;
         Crypto = crypto;
-        PacketSerializer = packetSerializer;
-        Logger = logger;
 
-        // Per-client receive buffer. Pool may round this up, which is fine.
-        MemoryOwner = MemoryPool<byte>.Shared.Rent(DefaultReceiveBufferSize);
+        // Rent a receive buffer bigger than max packet to allow multiple packets per read
+        MemoryOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
         MemoryHandle = Memory.Pin();
 
+        Logger = logger;
+        PacketSerializer = packetSerializer;
         RemoteIp = (Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
         ReceiveSync = new FifoSemaphoreSlim(1, 1, $"{GetType().Name} {RemoteIp} (Socket)");
 
-        // Bounded send queue with DropOldest semantics.
-        // Under load, old buffered packets are discarded in favor of new ones.
-        var channelOptions = new BoundedChannelOptions(DefaultSendQueueCapacity)
-        {
-            SingleReader = true,
-            SingleWriter = false,
-            FullMode = BoundedChannelFullMode.DropOldest
-        };
-
-        _sendChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(channelOptions);
+        var initialArgs = Enumerable.Range(0, 5).Select(_ => CreateArgs());
+        SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
 
         Connected = false;
-
-        // Dedicated send loop per client
-        _ = RunSendLoopAsync();
     }
 
     public virtual void Dispose()
     {
         GC.SuppressFinalize(this);
-
-        try { _sendCancellation.Cancel(); } catch { }
-        try { _sendCancellation.Dispose(); } catch { }
-
         try { MemoryHandle.Dispose(); } catch { }
         try { MemoryOwner.Dispose(); } catch { }
-
         try { Socket.Close(); } catch { }
     }
 
@@ -130,8 +105,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     #region Networking
     public virtual async void BeginReceive()
     {
-        if (!Socket.Connected)
-            return;
+        if (!Socket.Connected) return;
 
         Connected = true;
         await Task.Yield();
@@ -139,7 +113,6 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         var args = new SocketAsyncEventArgs();
         args.SetBuffer(Memory);
         args.Completed += ReceiveEventHandler;
-
         Socket.ReceiveAndForget(args, ReceiveEventHandler);
     }
 
@@ -173,6 +146,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                 byte sig = Buffer[offset];
                 if (sig != 170) // 0xAA
                 {
+                    // Bad signature / malformed stream. Disconnect.
                     Disconnect();
                     return;
                 }
@@ -180,6 +154,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                 // Extract length
                 int lengthHi = Buffer[offset + 1];
                 int lengthLo = Buffer[offset + 2];
+
                 int payloadLength = (lengthHi << 8) | lengthLo;
 
                 // Full frame length = payload + 3 header bytes
@@ -187,6 +162,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
                 if (frameLength <= 0 || frameLength > MaxPacketLength)
                 {
+                    // Length out of allowed bounds -> disconnect to protect the server
                     Disconnect();
                     return;
                 }
@@ -204,7 +180,30 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                 }
                 catch (Exception ex)
                 {
-                    LogPacketError(ex, offset, frameLength);
+                    try
+                    {
+                        var slice = Buffer.Slice(offset, frameLength);
+                        var hex = BitConverter.ToString(slice.ToArray()).Replace("-", " ");
+                        var ascii = Encoding.ASCII.GetString(slice);
+
+                        Logger.WithTopics(
+                                  Topics.Entities.Client,
+                                  Topics.Entities.Packet,
+                                  Topics.Actions.Processing)
+                              .WithProperty(this)
+                              .LogError(
+                                  ex,
+                                  "Error handling packet (Offset={Offset}, Length={Length})\nHex: {Hex}\nASCII: {Ascii}",
+                                  offset,
+                                  frameLength,
+                                  hex,
+                                  ascii);
+                    }
+                    catch
+                    {
+                        // If logging the packet fails, swallow to avoid bringing down the server.
+                    }
+
                     // Reset to avoid poisoned state
                     Count = 0;
                     break;
@@ -224,7 +223,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                     Buffer.Slice(offset, Count).CopyTo(Buffer);
             }
 
-            // Continue reading after leftover bytes
+            // Continue reading into the remainder of available space
             e.SetBuffer(Memory.Slice(Count));
             Socket.ReceiveAndForget(e, ReceiveEventHandler);
         }
@@ -234,42 +233,15 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         }
         finally
         {
-            ReceiveSync.Release();
-        }
-    }
-
-    private void LogPacketError(Exception ex, int offset, int length)
-    {
-        try
-        {
-            var slice = Buffer.Slice(offset, length);
-            var hex = BitConverter.ToString(slice.ToArray()).Replace("-", " ");
-            var ascii = Encoding.ASCII.GetString(slice);
-
-            Logger.WithTopics(
-                      Topics.Entities.Client,
-                      Topics.Entities.Packet,
-                      Topics.Actions.Processing)
-                  .WithProperty(this)
-                  .LogError(
-                      ex,
-                      "Error handling packet (Offset={Offset}, Length={Length})\nHex: {Hex}\nASCII: {Ascii}",
-                      offset,
-                      length,
-                      hex,
-                      ascii);
-        }
-        catch
-        {
-            // If logging the packet fails, swallow to avoid bringing down the server.
+            if (Connected)
+                ReceiveSync.Release();
         }
     }
 
     /// <inheritdoc />
     public virtual void Send<T>(T obj) where T : IPacketSerializable
     {
-        if (!Connected || !Socket.Connected)
-            return;
+        if (!Connected || !Socket.Connected) return;
 
         var packet = PacketSerializer.Serialize(obj);
 
@@ -290,15 +262,16 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
             Encrypt(ref packet);
         }
 
+        // [signature][len_hi][len_lo][opcode][sequence][payload]
         var memory = packet.ToMemory();
 
-        EnqueueSend(memory);
+        var args = DequeueArgs(memory);
+        Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
     public virtual void Send(ref Packet packet)
     {
-        if (!Connected || !Socket.Connected)
-            return;
+        if (!Connected || !Socket.Connected) return;
 
         if (LogRawPackets)
             Logger.WithTopics(
@@ -317,9 +290,11 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
             Encrypt(ref packet);
         }
 
+        // [signature][len_hi][len_lo][opcode][sequence][payload]
         var memory = packet.ToMemory();
 
-        EnqueueSend(memory);
+        var args = DequeueArgs(memory);
+        Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
     public abstract bool IsEncrypted(byte opCode);
@@ -327,13 +302,9 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
     public virtual void Disconnect()
     {
-        if (!Connected)
-            return;
+        if (!Connected) return;
 
         Connected = false;
-
-        try { _sendChannel.Writer.TryComplete(); } catch { }
-        try { _sendCancellation.Cancel(); } catch { }
 
         try { Socket.Shutdown(SocketShutdown.Receive); } catch { }
         try { OnDisconnected?.Invoke(this, EventArgs.Empty); } catch { }
@@ -345,66 +316,31 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     #endregion
 
     #region Utility
-    private void EnqueueSend(ReadOnlyMemory<byte> buffer)
+    private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e)
     {
-        // DropOldest mode:
-        // - If there's space, TryWrite enqueues normally.
-        // - If full, the channel drops one old item internally to make room for this one.
-        // TryWrite only returns false if the writer is completed/closed.
-        _sendChannel.Writer.TryWrite(buffer);
+        if (e.UserToken is IMemoryOwner<byte> mem)
+        {
+            e.UserToken = null;
+            mem.Dispose();
+        }
+
+        SocketArgsQueue.Enqueue(e);
     }
 
-    private async Task RunSendLoopAsync()
+    private SocketAsyncEventArgs CreateArgs()
     {
-        try
-        {
-            while (await _sendChannel.Reader
-                       .WaitToReadAsync(_sendCancellation.Token)
-                       .ConfigureAwait(false))
-            {
-                while (_sendChannel.Reader.TryRead(out var buffer))
-                {
-                    if (!Connected || !Socket.Connected)
-                        return;
+        var args = new SocketAsyncEventArgs();
+        args.Completed += ReuseSocketAsyncEventArgs;
+        return args;
+    }
 
-                    try
-                    {
-                        var remaining = buffer.Length;
-                        var offset = 0;
+    private SocketAsyncEventArgs DequeueArgs(Memory<byte> buffer)
+    {
+        if (!SocketArgsQueue.TryDequeue(out var args))
+            args = CreateArgs();
 
-                        while (remaining > 0)
-                        {
-                            var slice = buffer.Slice(offset, remaining);
-                            var sent = await Socket
-                                .SendAsync(slice, SocketFlags.None, _sendCancellation.Token)
-                                .ConfigureAwait(false);
-
-                            if (sent <= 0)
-                            {
-                                Disconnect();
-                                return;
-                            }
-
-                            offset += sent;
-                            remaining -= sent;
-                        }
-                    }
-                    catch
-                    {
-                        Disconnect();
-                        return;
-                    }
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Normal during shutdown/disconnect.
-        }
-        catch
-        {
-            Disconnect();
-        }
+        args.SetBuffer(buffer);
+        return args;
     }
     #endregion
 }
