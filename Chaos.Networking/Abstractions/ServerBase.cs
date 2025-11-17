@@ -263,7 +263,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// </summary>
     protected virtual void IndexHandlers()
     {
-        ClientHandlers[(byte)ClientOpCode.HeartBeat] = OnHeartBeatAsync;
         ClientHandlers[(byte)ClientOpCode.SequenceChange] = OnSequenceChangeAsync;
         ClientHandlers[(byte)ClientOpCode.SynchronizeTicks] = OnSynchronizeTicksAsync;
     }
@@ -275,33 +274,82 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         return handler?.Invoke(client, in packet) ?? default;
     }
 
+    public enum HandlerCategory
+    {
+        RealTime,
+        Standard
+    }
+
     /// <summary>
-    /// Provides a set of argument type names that are used for real-time event handling within the system.
+    /// Client handler categories mapped by argument type.
     /// </summary>
-    /// <remarks>This collection includes the names of argument types relevant to various real-time
-    /// operations, such as client actions, item interactions, and system events. It can be used to identify or filter
-    /// supported real-time argument types when processing events.
-    /// </remarks>
-    private static readonly HashSet<string> RealTimeArgTypeNames =
-    [
-        nameof(MapDataArgs),
-        nameof(ClientWalkArgs),
-        nameof(PickupArgs),
-        nameof(ItemDropArgs),
-        nameof(ExitRequestArgs),
-        nameof(ClientRedirectedArgs),
-        nameof(TurnArgs),
-        nameof(ItemUseArgs),
-        nameof(GoldDropArgs),
-        nameof(ItemDroppedOnCreatureArgs),
-        nameof(GoldDroppedOnCreatureArgs),
-        nameof(SwapSlotArgs),
-        nameof(UnequipArgs),
-        nameof(HeartBeatArgs),
-        nameof(RaiseStatArgs),
-        nameof(ExchangeInteractionArgs),
-        nameof(MetaDataRequestArgs)
-    ];
+    private static readonly Dictionary<Type, HandlerCategory> HandlerCategories = new()
+    {
+        // RealTime Handlers
+        { typeof(BeginChantArgs), HandlerCategory.RealTime }, // Spellcasting
+        { typeof(ChantArgs), HandlerCategory.RealTime }, // Spellcasting
+        { typeof(ClientRedirectedArgs), HandlerCategory.RealTime }, // Server Redirection
+        { typeof(ClientWalkArgs), HandlerCategory.RealTime }, // Client Movement
+        { typeof(ExchangeInteractionArgs), HandlerCategory.RealTime }, // Player Trading
+        { typeof(ExitRequestArgs), HandlerCategory.RealTime }, // Game Exit
+        { typeof(GoldDropArgs), HandlerCategory.RealTime }, // Gold Drop on Ground
+        { typeof(HeartBeatArgs), HandlerCategory.RealTime }, // Ping/Pong
+        { typeof(ItemDropArgs), HandlerCategory.RealTime }, // Item Drop on Ground
+        { typeof(ItemUseArgs), HandlerCategory.RealTime }, // Item Use
+        { typeof(LoginArgs), HandlerCategory.RealTime }, // User Login
+        { typeof(MapDataRequestArgs), HandlerCategory.RealTime }, // Map Data Request
+        { typeof(NoticeRequestArgs), HandlerCategory.RealTime }, // Intro Notice Board
+        { typeof(PickupArgs), HandlerCategory.RealTime }, // Item/Gold Pickup from Ground
+        { typeof(RaiseStatArgs), HandlerCategory.RealTime }, // Player Stat Raise
+        { typeof(SequenceChangeArgs), HandlerCategory.RealTime }, // Packet Sequence Change
+        { typeof(ServerTableRequestArgs), HandlerCategory.RealTime }, // Server List
+        { typeof(SkillUseArgs), HandlerCategory.RealTime }, // Skill Use
+        { typeof(SpacebarArgs), HandlerCategory.RealTime }, // Skill Use
+        { typeof(SpellUseArgs), HandlerCategory.RealTime }, // Spellcasting
+        { typeof(SwapSlotArgs), HandlerCategory.RealTime }, // Ability & Item Slot Swap
+        { typeof(SynchronizeTicksArgs), HandlerCategory.RealTime }, // Server Synchronization
+        { typeof(TurnArgs), HandlerCategory.RealTime }, // Client Movement
+        { typeof(UnequipArgs), HandlerCategory.RealTime }, // Player Unequip Item
+
+        // Standard Handlers
+        { typeof(BoardInteractionArgs), HandlerCategory.Standard }, // Board Interaction
+        { typeof(ClickArgs), HandlerCategory.Standard }, // On Click Actions
+        { typeof(ClientExceptionArgs), HandlerCategory.Standard }, // Client Exceptions
+        { typeof(CreateCharFinalizeArgs), HandlerCategory.Standard }, // Character Creation
+        { typeof(CreateCharInitialArgs), HandlerCategory.Standard }, // Character Creation
+        { typeof(CreateGroupBoxInfo), HandlerCategory.Standard }, // Group Management
+        { typeof(DialogInteractionArgs), HandlerCategory.Standard }, // NPC Interaction
+        { typeof(DisplayEntityRequestArgs), HandlerCategory.Standard }, // Client Entity ID Request
+        { typeof(EditableProfileArgs), HandlerCategory.Standard }, // Profile Editing
+        { typeof(EmoteArgs), HandlerCategory.Standard }, // Emote Animation
+        { typeof(GoldDroppedOnCreatureArgs), HandlerCategory.Standard }, // Gold Drop on NPC
+        { typeof(HomepageRequestArgs), HandlerCategory.Standard }, // Homepage Request
+        { typeof(IgnoreArgs), HandlerCategory.Standard }, // Player Ignore List
+        { typeof(ItemDroppedOnCreatureArgs), HandlerCategory.Standard }, // Item Drop on NPC
+        { typeof(MenuInteractionArgs), HandlerCategory.Standard }, // NPC Menu Interaction
+        { typeof(MetaDataRequestArgs), HandlerCategory.Standard }, // Metafile Data Request
+        { typeof(OptionToggleArgs), HandlerCategory.Standard }, // Player Settings Toggle
+        { typeof(PasswordChangeArgs), HandlerCategory.Standard }, // Player Password Change
+        { typeof(PublicMessageArgs), HandlerCategory.Standard }, // Public Player Chat
+        { typeof(RefreshRequestArgs), HandlerCategory.Standard }, // Map Refresh Request
+        { typeof(SelfProfileRequestArgs), HandlerCategory.Standard }, // Player Self-Profile Request
+        { typeof(SetNotepadArgs), HandlerCategory.Standard }, // Player Notepad Update
+        { typeof(SocialStatusArgs), HandlerCategory.Standard }, // Player Social Status Update
+        { typeof(ToggleGroupArgs), HandlerCategory.Standard }, // Player Group Toggle
+        { typeof(VersionArgs), HandlerCategory.Standard }, // Client Version Check
+        { typeof(WhisperArgs), HandlerCategory.Standard }, // Private Player Chat
+        { typeof(WorldListRequestArgs), HandlerCategory.Standard }, // Player Worldlist Request
+        { typeof(WorldMapClickArgs), HandlerCategory.Standard }, // Player World Map Interaction
+    };
+
+    private static HandlerCategory GetHandlerCategory(object args)
+    {
+        if (HandlerCategories.TryGetValue(args.GetType(), out var category))
+            return category;
+
+        // Default new/unknown handlers to Standard for backpressure safety
+        return HandlerCategory.Standard;
+    }
 
     /// <summary>
     /// Executes an asynchronous action for a client within a synchronized context.
@@ -312,8 +360,11 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        if (RealTimeArgTypeNames.Contains(args.GetType().Name))
+        var category = GetHandlerCategory(args!);
+
+        if (category == HandlerCategory.RealTime)
         {
+            // Higher priority -> Direct execution
             await TryExecuteActionWithArgs(client, args, action);
             return;
         }
@@ -355,8 +406,14 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// </summary>
     /// <param name="client">The client to execute the action against</param>
     /// <param name="action">The action to be executed</param>
-    public virtual async ValueTask ExecuteHandler(T client, Func<T, ValueTask> action)
+    public virtual async ValueTask ExecuteHandler(T client, HandlerCategory category, Func<T, ValueTask> action)
     {
+        if (category == HandlerCategory.RealTime)
+        {
+            await ExecuteHandlerCore(client, action);
+            return;
+        }
+
         await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
         if (@lock == null)
@@ -365,6 +422,11 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
             return;
         }
 
+        await ExecuteHandlerCore(client, action);
+    }
+
+    private async ValueTask ExecuteHandlerCore(T client, Func<T, ValueTask> action)
+    {
         try
         {
             await action(client);
@@ -375,16 +437,6 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
                   .WithProperty(client)
                   .LogError(e, "{@ClientType} failed to execute inner handler", client.GetType().Name);
         }
-    }
-
-    /// <inheritdoc />
-    public virtual ValueTask OnHeartBeatAsync(T client, in Packet packet)
-    {
-        _ = PacketSerializer.Deserialize<HeartBeatArgs>(in packet);
-
-        //do nothing
-
-        return default;
     }
 
     /// <inheritdoc />
@@ -415,16 +467,12 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         // Disable the Nagle Algorithm for low-latency communication
         tcpSocket.NoDelay = true;
 
-        // Allows server to process multiple clients concurrently without blocking until data is read/written
+        // Concurrency comes from async usage; this flag makes sync operations also non-blocking
         tcpSocket.Blocking = false;
 
-        // Smaller buffer size (8 KB) to ensure latency remains low, especially for legacy clients
-        tcpSocket.ReceiveBufferSize = 16384;
-        tcpSocket.SendBufferSize = 16384;
-
-        // Short timeouts to avoid latency buildup
-        tcpSocket.ReceiveTimeout = 1000;
-        tcpSocket.SendTimeout = 1000;
+        // Kernel buffers sized for typical game traffic (tuned separately from app-level buffers)
+        tcpSocket.ReceiveBufferSize = 64 * 1024;
+        tcpSocket.SendBufferSize = 64 * 1024;
 
         // Enable TCP keep-alive to detect stale connections
         tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
@@ -435,12 +483,26 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     private void StartAcceptLoop()
     {
         _acceptArgs.Completed += OnAcceptCompleted;
-        if (!Socket.AcceptAsync(_acceptArgs))
-            OnAcceptCompleted(Socket, _acceptArgs);
+
+        try
+        {
+            if (!Socket.AcceptAsync(_acceptArgs))
+                OnAcceptCompleted(Socket, _acceptArgs);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Server stopping, listener already closed
+        }
     }
 
     private void OnAcceptCompleted(object? sender, SocketAsyncEventArgs e)
     {
+        if (e.SocketError != SocketError.Success)
+        {
+            if (!Socket.IsBound) return;
+            Logger.LogError("Socket accept failed with error: {SocketError}", e.SocketError);
+        }
+
         var clientSocket = e.AcceptSocket;
         e.AcceptSocket = null;
 
@@ -448,28 +510,35 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         {
             try
             {
-                if (clientSocket.Connected)
+                var ipAddress = ((IPEndPoint)clientSocket.RemoteEndPoint!).Address.ToString();
+                if (IsConnectionAllowed(ipAddress))
                 {
-                    var ipAddress = ((IPEndPoint)clientSocket.RemoteEndPoint!).Address.ToString();
-                    if (IsConnectionAllowed(ipAddress))
-                    {
-                        ConfigureTcpSocket(clientSocket);
-                        OnConnected(clientSocket);
-                    }
-                    else
-                    {
-                        clientSocket.Close();
-                    }
+                    ConfigureTcpSocket(clientSocket);
+                    OnConnected(clientSocket);
+                }
+                else
+                {
+                    clientSocket.Close();
                 }
             }
             catch
             {
-                try { clientSocket?.Close(); } catch { }
+                try { clientSocket.Close(); } catch { }
             }
         }
 
-        if (!Socket.AcceptAsync(e))
-            OnAcceptCompleted(Socket, e);
+        try
+        {
+            if (!Socket.AcceptAsync(e))
+                OnAcceptCompleted(Socket, e);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Server is stopping, listener has been closed – exit gracefully
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error calling AcceptAsync on {ServerType}", GetType().Name);
+        }
     }
-
 }

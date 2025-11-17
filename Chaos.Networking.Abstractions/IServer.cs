@@ -15,11 +15,6 @@ public interface IServer<in TClient> : IHostedService where TClient : IConnected
     ValueTask HandlePacketAsync(TClient client, in Packet packet);
 
     /// <summary>
-    ///     A client has sent a heartbeat(keep-alive) ping
-    /// </summary>
-    ValueTask OnHeartBeatAsync(TClient client, in Packet packet);
-
-    /// <summary>
     ///     A client has requested to change the packet sequence number
     /// </summary>
     ValueTask OnSequenceChangeAsync(TClient client, in Packet packet);
