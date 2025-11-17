@@ -23,9 +23,10 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 {
     private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
     private int Count;
+    private int _disconnecting;
 
-    private const int ReceiveBufferSize = 32 * 1024; // 32 KB rolling buffer
-    public virtual int MaxPacketLength { get; } = 12 * 1024; // 12 KB per packet
+    private const int ReceiveBufferSize = 64 * 1024; // 64 KB rolling buffer
+    public virtual int MaxPacketLength { get; } = 12 * 1024; // 12 KB per packet max
     private int Sequence;
 
     /// <inheritdoc />
@@ -80,29 +81,18 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         RemoteIp = (Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
         ReceiveSync = new FifoSemaphoreSlim(1, 1, $"{GetType().Name} {RemoteIp} (Socket)");
 
-        var initialArgs = Enumerable.Range(0, 5).Select(_ => CreateArgs());
+        var initialArgs = Enumerable.Range(0, 10).Select(_ => CreateArgs());
         SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
 
         Connected = false;
     }
 
-    public virtual void Dispose()
-    {
-        GC.SuppressFinalize(this);
-        try { MemoryHandle.Dispose(); } catch { }
-        try { MemoryOwner.Dispose(); } catch { }
-        try { Socket.Close(); } catch { }
-    }
-
     public event EventHandler? OnDisconnected;
-
-    #region Actions
     public virtual void SetSequence(byte newSequence) => Sequence = newSequence;
-    #endregion
-
     protected abstract ValueTask HandlePacketAsync(Span<byte> span);
 
     #region Networking
+
     public virtual async void BeginReceive()
     {
         if (!Socket.Connected) return;
@@ -113,6 +103,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         var args = new SocketAsyncEventArgs();
         args.SetBuffer(Memory);
         args.Completed += ReceiveEventHandler;
+
         Socket.ReceiveAndForget(args, ReceiveEventHandler);
     }
 
@@ -122,9 +113,10 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
         try
         {
-            int bytesRead = e.BytesTransferred;
+            var bytesRead = e.BytesTransferred;
 
-            if (bytesRead == 0)
+            // Transport-level dead? (remote closed or socket error)
+            if (bytesRead == 0 || e.SocketError != SocketError.Success)
             {
                 Disconnect();
                 return;
@@ -132,8 +124,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
             // Total bytes accumulated in the rolling buffer
             Count += bytesRead;
-
-            int offset = 0;
+            var offset = 0;
 
             // Process as many complete packets as possible
             while (true)
@@ -144,9 +135,9 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
                 // Signature check
                 byte sig = Buffer[offset];
-                if (sig != 170) // 0xAA
+                if (sig != 0xAA)
                 {
-                    // Bad signature / malformed stream. Disconnect.
+                    // Bad signature / malformed stream
                     Disconnect();
                     return;
                 }
@@ -154,15 +145,13 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                 // Extract length
                 int lengthHi = Buffer[offset + 1];
                 int lengthLo = Buffer[offset + 2];
-
                 int payloadLength = (lengthHi << 8) | lengthLo;
-
                 // Full frame length = payload + 3 header bytes
                 int frameLength = payloadLength + 3;
 
                 if (frameLength <= 0 || frameLength > MaxPacketLength)
                 {
-                    // Length out of allowed bounds -> disconnect to protect the server
+                    // Length out of allowed bounds
                     Disconnect();
                     return;
                 }
@@ -223,7 +212,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                     Buffer.Slice(offset, Count).CopyTo(Buffer);
             }
 
-            // Continue reading into the remainder of available space
+            // Re-arm receive
             e.SetBuffer(Memory.Slice(Count));
             Socket.ReceiveAndForget(e, ReceiveEventHandler);
         }
@@ -233,8 +222,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         }
         finally
         {
-            if (Connected)
-                ReceiveSync.Release();
+            ReceiveSync.Release();
         }
     }
 
@@ -302,7 +290,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
     public virtual void Disconnect()
     {
-        if (!Connected) return;
+        if (Interlocked.Exchange(ref _disconnecting, 1) == 1) return;
 
         Connected = false;
 
@@ -312,10 +300,23 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         Dispose();
     }
 
+    public virtual void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        try { MemoryHandle.Dispose(); } catch { }
+        try { MemoryOwner.Dispose(); } catch { }
+        try { Socket.Close(); } catch { }
+    }
+
     public virtual void Close() => Socket.Close();
+
     #endregion
 
     #region Utility
+
+    /// <summary>
+    /// Disposes memory owner if present and recycles SAEA back to the queue
+    /// </summary>
     private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e)
     {
         if (e.UserToken is IMemoryOwner<byte> mem)
@@ -342,5 +343,6 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         args.SetBuffer(buffer);
         return args;
     }
+
     #endregion
 }
