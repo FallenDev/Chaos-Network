@@ -25,8 +25,8 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     private int Count;
     private int _disconnecting;
 
-    private const int ReceiveBufferSize = 64 * 1024; // 64 KB rolling buffer
-    public virtual int MaxPacketLength { get; } = 12 * 1024; // 12 KB per packet max
+    private const int ReceiveBufferSize = 64 * 1024;
+    public virtual int MaxPacketLength { get; } = 4 * 1024;
     private int Sequence;
 
     /// <inheritdoc />
@@ -63,10 +63,10 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     private Memory<byte> Memory => MemoryOwner.Memory;
 
     protected SocketClientBase(
-        Socket socket,
-        ICrypto crypto,
-        IPacketSerializer packetSerializer,
-        ILogger<SocketClientBase> logger)
+    Socket socket,
+    ICrypto crypto,
+    IPacketSerializer packetSerializer,
+    ILogger<SocketClientBase> logger)
     {
         Id = SequentialIdGenerator<uint>.Shared.NextId;
         Socket = socket;
@@ -115,9 +115,16 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
         {
             var bytesRead = e.BytesTransferred;
 
-            // Transport-level dead? (remote closed or socket error)
-            if (bytesRead == 0 || e.SocketError != SocketError.Success)
+            if (bytesRead == 0)
             {
+                // Graceful remote shutdown
+                Disconnect();
+                return;
+            }
+
+            if (e.SocketError != SocketError.Success)
+            {
+                // Transport-level failure
                 Disconnect();
                 return;
             }
@@ -137,7 +144,9 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                 byte sig = Buffer[offset];
                 if (sig != 0xAA)
                 {
-                    // Bad signature / malformed stream
+                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                                            .WithProperty(this)
+                                            .LogWarning("Disconnecting client {RemoteIp} due to bad signature: {Sig} (Count={Count})", RemoteIp, sig, Count);
                     Disconnect();
                     return;
                 }
@@ -151,7 +160,9 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
                 if (frameLength <= 0 || frameLength > MaxPacketLength)
                 {
-                    // Length out of allowed bounds
+                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                                            .WithProperty(this)
+                                            .LogWarning("Disconnecting client {RemoteIp} due to invalid frame length. Payload={PayloadLength}, Frame={FrameLength}, Count={Count}", RemoteIp, payloadLength, frameLength, Count);
                     Disconnect();
                     return;
                 }
@@ -294,7 +305,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
         Connected = false;
 
-        try { Socket.Shutdown(SocketShutdown.Receive); } catch { }
+        try { Socket.Shutdown(SocketShutdown.Both); } catch { }
         try { OnDisconnected?.Invoke(this, EventArgs.Empty); } catch { }
 
         Dispose();
