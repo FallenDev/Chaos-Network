@@ -2,10 +2,8 @@ using System.Net;
 using System.Net.Sockets;
 
 using Chaos.Common.Synchronization;
-using Chaos.Extensions.Common;
 using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
-using Chaos.Networking.Entities.Server;
 using Chaos.Networking.Options;
 using Chaos.NLog.Logging.Definitions;
 using Chaos.NLog.Logging.Extensions;
@@ -76,6 +74,11 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     protected Socket Socket { get; }
 
     /// <summary>
+    ///     Represents the SocketAsyncEventArgs used for accepting incoming connections.
+    /// </summary>
+    private readonly SocketAsyncEventArgs _acceptArgs = new();
+
+    /// <summary>
     ///     A semaphore for synchronizing access to the server.
     /// </summary>
     protected FifoAutoReleasingSemaphoreSlim Sync { get; }
@@ -94,6 +97,14 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     ///     The window of time to track connection attempts.
     /// </summary>
     private readonly TimeSpan ConnectionWindow = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    ///     Represents the interval, in milliseconds, at which connection-attempt tracking is pruned to prevent unbounded growth.
+    /// </summary>
+    /// <remarks>A value of 3,600,000 milliseconds corresponds to a pruning interval of one hour. Adjust this
+    /// value to control how frequently stale connection-attempt data is removed.</remarks>
+    private const int PruneIntervalMs = 60 * 60 * 1000;
+    private long _nextPruneTicks = DateTime.UtcNow.AddMilliseconds(PruneIntervalMs).Ticks;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="ServerBase{T}" /> class.
@@ -131,58 +142,137 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         {
             Socket.Close();
         }
-        catch
-        {
-            //ignored
-        }
+        catch { }
 
         base.Dispose();
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    ///    Starts the server listener and runs the main accept loop.
+    ///
+    ///    IMPORTANT:
+    ///    This method does NOT spin or consume CPU while idle.
+    ///    The await on AcceptAsync yields control to the OS until a client connects.
+    /// 
+    ///     - Bind() and Listen() are called ONCE during startup.
+    ///     - AcceptAsync() waits for incoming connections.
+    ///     - Each iteration returns ONE client socket, which is handed off to OnConnected().
+    ///     - The loop exits cleanly when the CancellationToken is triggered or the socket is closed.
+    /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Ensure this method executes asynchronously
         await Task.Yield();
 
         var endPoint = new IPEndPoint(IPAddress.Any, Options.Port);
-        Socket.Bind(endPoint);
-        Socket.Listen(100);
-
-        Logger.WithTopics(Topics.Actions.Listening)
-              .LogInformation("Listening on {@EndPoint}", endPoint.Port.ToString());
-
-        StartAcceptLoop();
-
-        await stoppingToken.WaitTillCanceled();
 
         try
         {
-            Socket.Shutdown(SocketShutdown.Receive);
+            // Server setup
+            Socket.Bind(endPoint);
+            Socket.Listen(backlog: 64);
+
+            Logger.WithTopics(Topics.Actions.Listening)
+                  .LogInformation("Listening on {@EndPoint}", endPoint.Port.ToString());
         }
-        catch
+        catch (Exception ex)
         {
-            //ignored
+            Logger.LogError(
+                ex,
+                "Failed to start {ServerType} on port {Port}",
+                GetType().Name,
+                Options.Port);
+
+            return;
         }
 
-        await Parallel.ForEachAsync(ClientRegistry, stoppingToken, static (client, _) =>
+        try
         {
-            try
+            // Main accept loop
+            while (!stoppingToken.IsCancellationRequested)
             {
-                client.Disconnect();
+                Socket clientSocket;
+
+                try
+                {
+                    clientSocket = await Socket.AcceptAsync(stoppingToken)
+                                               .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+                catch (ObjectDisposedException) when (stoppingToken.IsCancellationRequested) { break; }
+                catch (SocketException ex)
+                {
+                    if (Socket.IsBound)
+                        Logger.LogError(ex, "Accept failed on {ServerType}", GetType().Name);
+
+                    continue;
+                }
+
+                string ipAddress;
+
+                try
+                {
+                    ipAddress = (clientSocket.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
+                }
+                catch
+                {
+                    try { clientSocket.Close(); } catch { }
+                    continue;
+                }
+
+                if (!ShouldAcceptConnection(clientSocket, out var rejectReason))
+                {
+                    if (!string.IsNullOrWhiteSpace(rejectReason))
+                    {
+                        Logger.WithTopics(Topics.Actions.Listening)
+                              .LogInformation("{RejectReason}", rejectReason);
+                    }
+
+                    try { clientSocket.Close(); } catch { }
+                    continue;
+                }
+
+                try
+                {
+                    ConfigureTcpSocket(clientSocket);
+                    OnConnected(clientSocket);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error handling accepted connection on {ServerType}", GetType().Name);
+                    try { clientSocket.Close(); } catch { }
+                }
             }
-            catch
+        }
+        finally
+        {
+            // Stop accepting new connections
+            try { Socket.Close(); } catch { }
+
+            // Disconnect all connected clients
+            foreach (var client in ClientRegistry.ToArray())
             {
-                //ignored
+                try { client.Disconnect(); } catch { }
             }
 
-            return default;
-        });
-
-        Dispose();
+            Dispose();
+        }
     }
 
     /// <summary>
-    ///     Called when a new connection is accepted by the server.
+    ///     Allows derived servers to apply connection gating (rate limiting, allowlists, etc.).
+    ///     Return true to accept the connection; false to immediately close it.
+    ///     Default: allow all.
+    /// </summary>
+    protected virtual bool ShouldAcceptConnection(Socket clientSocket, out string? rejectReason)
+    {
+        rejectReason = null;
+        return true;
+    }
+
+    /// <summary>
+    ///     Called when a new connection is accepted by the server. 
+    ///     Is overloaded in derived classes to handle each server (Lobby, Login, World)
     /// </summary>
     /// <param name="clientSocket">
     ///     The socket that connected to the server
@@ -190,54 +280,17 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     protected abstract void OnConnected(Socket clientSocket);
 
     /// <summary>
-    ///     Called when a new connection is accepted by the server.
-    /// </summary>
-    /// <param name="ar">
-    ///     The result of the asynchronous connection operation
-    /// </param>
-    protected virtual void OnConnection(IAsyncResult ar)
-    {
-        var serverSocket = (Socket)ar.AsyncState!;
-        Socket clientSocket = null;
-
-        try
-        {
-            clientSocket = serverSocket.EndAccept(ar);
-        }
-        catch
-        {
-            // ignored
-        }
-        finally
-        {
-            serverSocket.BeginAccept(OnConnection, serverSocket);
-        }
-
-        if (clientSocket is null || !clientSocket.Connected) return;
-        var ipAddress = ((IPEndPoint)clientSocket.RemoteEndPoint!).Address.ToString();
-
-        // Check if the connection from this IP exceeds the rate limit
-        if (IsConnectionAllowed(ipAddress))
-        {
-            // Connection is allowed, configure the socket and handle the connection
-            ConfigureTcpSocket(clientSocket);
-            OnConnected(clientSocket);
-        }
-        else
-        {
-            // If the connection is not allowed, we reject the connection by closing the socket immediately
-            clientSocket.Close();
-        }
-    }
-
-    /// <summary>
     ///     Checks if the IP address is allowed to make a connection based on rate-limiting rules.
     /// </summary>
     /// <param name="ipAddress">The IP address of the connecting client</param>
     /// <returns>True if the connection is allowed, otherwise false</returns>
-    private bool IsConnectionAllowed(string ipAddress)
+    protected bool IsConnectionAllowed(string ipAddress)
     {
         var now = DateTime.UtcNow;
+
+        // Prune old connection attempts
+        PruneOldConnectionAttempts(now);
+
         var connectionData = ConnectionAttempts.GetOrAdd(ipAddress, _ => (0, now));
 
         // If the last connection is older than the window, reset the count
@@ -254,6 +307,60 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
         // Otherwise, increment the count and allow the connection
         ConnectionAttempts[ipAddress] = (connectionData.Count + 1, connectionData.LastConnection);
         return true;
+    }
+
+    /// <summary>
+    ///    Prunes stale IP connection-attempt entries at most once per hour.
+    ///
+    ///    This method is designed to be:
+    ///     - Lock-free and allocation-free on the hot path
+    ///     - Safe under heavy concurrent access from multiple accept loops
+    ///
+    ///    How it works:
+    ///     - Uses Volatile.Read to ensure all threads observe the most recent
+    ///     scheduled prune time without relying on locks.
+    ///     - Uses Interlocked.CompareExchange to guarantee that only ONE thread
+    ///     performs the prune when the interval elapses.
+    ///     - All other threads immediately exit once another thread has claimed
+    ///     the prune window.
+    ///
+    ///    This prevents unbounded growth of the connection-attempt cache while
+    ///    keeping connection acceptance fast and contention-free.
+    /// </summary>
+    private void PruneOldConnectionAttempts(DateTime now)
+    {
+        // Fast path: Gives the most recent value without locking
+        var nextTicks = Volatile.Read(ref _nextPruneTicks);
+        if (now.Ticks < nextTicks) return;
+
+        // Single-writer gate so only one thread prunes
+        var newNext = now.AddMilliseconds(PruneIntervalMs).Ticks;
+        if (Interlocked.CompareExchange(ref _nextPruneTicks, newNext, nextTicks) != nextTicks) return;
+
+        // Prune anything stale (older than 2x the window)
+        var cutoff = now - (ConnectionWindow + ConnectionWindow);
+
+        foreach (var kvp in ConnectionAttempts)
+        {
+            if (kvp.Value.LastConnection < cutoff)
+                ConnectionAttempts.TryRemove(kvp.Key, out _);
+        }
+    }
+
+    private static void ConfigureTcpSocket(Socket tcpSocket)
+    {
+        // The socket will not linger when Socket.Close is called
+        tcpSocket.LingerState = new LingerOption(false, 0);
+
+        // Disable the Nagle Algorithm for low-latency communication
+        tcpSocket.NoDelay = true;
+
+        // Kernel buffers sized for typical game traffic (tuned separately from app-level buffers)
+        tcpSocket.ReceiveBufferSize = 64 * 1024;
+        tcpSocket.SendBufferSize = 64 * 1024;
+
+        // Enable TCP keep-alive to detect stale connections
+        tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
     }
 
     #region Handlers
@@ -281,7 +388,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     }
 
     /// <summary>
-    /// Client handler categories mapped by argument type.
+    ///     Client handler categories mapped by argument type.
     /// </summary>
     private static readonly Dictionary<Type, HandlerCategory> HandlerCategories = new()
     {
@@ -352,7 +459,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     }
 
     /// <summary>
-    /// Executes an asynchronous action for a client within a synchronized context.
+    ///     Executes an asynchronous action for a client within a synchronized context.
     /// </summary>
     /// <param name="client">The client to execute the action against</param>
     /// <param name="args">The args deserialized from the packet</param>
@@ -458,87 +565,4 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     }
 
     #endregion
-
-    private static void ConfigureTcpSocket(Socket tcpSocket)
-    {
-        // The socket will not linger when Socket.Close is called
-        tcpSocket.LingerState = new LingerOption(false, 0);
-
-        // Disable the Nagle Algorithm for low-latency communication
-        tcpSocket.NoDelay = true;
-
-        // Concurrency comes from async usage; this flag makes sync operations also non-blocking
-        tcpSocket.Blocking = false;
-
-        // Kernel buffers sized for typical game traffic (tuned separately from app-level buffers)
-        tcpSocket.ReceiveBufferSize = 64 * 1024;
-        tcpSocket.SendBufferSize = 64 * 1024;
-
-        // Enable TCP keep-alive to detect stale connections
-        tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-    }
-
-    private readonly SocketAsyncEventArgs _acceptArgs = new();
-
-    private void StartAcceptLoop()
-    {
-        _acceptArgs.Completed += OnAcceptCompleted;
-
-        try
-        {
-            if (!Socket.AcceptAsync(_acceptArgs))
-                OnAcceptCompleted(Socket, _acceptArgs);
-        }
-        catch (ObjectDisposedException)
-        {
-            // Server stopping, listener already closed
-        }
-    }
-
-    private void OnAcceptCompleted(object? sender, SocketAsyncEventArgs e)
-    {
-        if (e.SocketError != SocketError.Success)
-        {
-            if (!Socket.IsBound) return;
-            Logger.LogError("Socket accept failed with error: {SocketError}", e.SocketError);
-        }
-
-        var clientSocket = e.AcceptSocket;
-        e.AcceptSocket = null;
-
-        if (clientSocket != null)
-        {
-            try
-            {
-                var ipAddress = ((IPEndPoint)clientSocket.RemoteEndPoint!).Address.ToString();
-                if (IsConnectionAllowed(ipAddress))
-                {
-                    ConfigureTcpSocket(clientSocket);
-                    OnConnected(clientSocket);
-                }
-                else
-                {
-                    clientSocket.Close();
-                }
-            }
-            catch
-            {
-                try { clientSocket.Close(); } catch { }
-            }
-        }
-
-        try
-        {
-            if (!Socket.AcceptAsync(e))
-                OnAcceptCompleted(Socket, e);
-        }
-        catch (ObjectDisposedException)
-        {
-            // Server is stopping, listener has been closed – exit gracefully
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Error calling AcceptAsync on {ServerType}", GetType().Name);
-        }
-    }
 }
