@@ -218,10 +218,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                                       .WithProperty(this)
                                       .LogError(ex, "Error handling packet (Length={Length})", frameLength);
                             }
-                            catch
-                            {
-                                // Swallow logging errors.
-                            }
+                            catch { }
                         }
 
                         // Reset buffer to avoid poisoned state / partial misalignment
