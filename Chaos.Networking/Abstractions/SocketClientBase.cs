@@ -211,35 +211,17 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                         {
                             try
                             {
-                                var hex = BitConverter.ToString(frame.ToArray()).Replace("-", " ");
-                                var ascii = Encoding.ASCII.GetString(frame);
-
                                 Logger.WithTopics(
                                           Topics.Entities.Client,
                                           Topics.Entities.Packet,
                                           Topics.Actions.Processing)
                                       .WithProperty(this)
-                                      .LogError(
-                                          ex,
-                                          "Error handling packet (Offset={Offset}, Length={Length})\nHex: {Hex}\nASCII: {Ascii}",
-                                          offset,
-                                          frameLength,
-                                          hex,
-                                          ascii);
+                                      .LogError(ex, "Error handling packet (Length={Length})", frameLength);
                             }
                             catch
                             {
                                 // Swallow logging errors.
                             }
-                        }
-                        else
-                        {
-                            Logger.WithTopics(
-                                      Topics.Entities.Client,
-                                      Topics.Entities.Packet,
-                                      Topics.Actions.Processing)
-                                  .WithProperty(this)
-                                  .LogError(ex, "Error handling packet (Length={Length})", frameLength);
                         }
 
                         // Reset buffer to avoid poisoned state / partial misalignment
