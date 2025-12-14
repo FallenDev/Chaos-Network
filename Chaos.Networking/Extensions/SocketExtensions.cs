@@ -7,19 +7,31 @@ internal static class SocketExtensions
 {
     internal static void ReceiveAndForget(this Socket socket, SocketAsyncEventArgs args, EventHandler<SocketAsyncEventArgs> completedEvent)
     {
-        //if we receive true, it means the io operation is pending, and the completion will be raised on the args completed event
-        var completedSynchronously = !socket.ReceiveAsync(args);
-
-        //if we receive false, it means the io operation completed synchronously, and the completed event will not be raised
-        if (completedSynchronously)
+        try
+        {
+            if (!socket.ReceiveAsync(args))
+                completedEvent(socket, args);
+        }
+        catch
+        {
+            // If ReceiveAsync throws, Completed will not fire. Ensure resources return to pool.
             completedEvent(socket, args);
+            throw;
+        }
     }
 
     internal static void SendAndForget(this Socket socket, SocketAsyncEventArgs args, EventHandler<SocketAsyncEventArgs> completedEvent)
     {
-        var completedSynchronously = !socket.SendAsync(args);
-
-        if (completedSynchronously)
+        try
+        {
+            if (!socket.SendAsync(args))
+                completedEvent(socket, args);
+        }
+        catch
+        {
+            // If SendAsync throws, Completed will not fire. Ensure resources return to pool.
             completedEvent(socket, args);
+            throw;
+        }
     }
 }

@@ -8,7 +8,6 @@ namespace Chaos.Packets;
 
 /// <summary>
 /// Serializes/deserializes packet payloads.
-/// Framing is handled exclusively by <see cref="Packet.ToSpan()"/>.
 /// </summary>
 public sealed class PacketSerializer : IPacketSerializer
 {

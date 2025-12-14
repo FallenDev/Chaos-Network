@@ -1,4 +1,4 @@
-using System.Text;
+using System.Runtime.CompilerServices;
 
 namespace Chaos.Packets;
 
@@ -7,6 +7,8 @@ namespace Chaos.Packets;
 /// </summary>
 public ref struct Packet
 {
+    private const byte DefaultSignature = 0xAA;
+
     /// <summary>
     ///     The buffer containing the packet data
     /// </summary>
@@ -67,30 +69,10 @@ public ref struct Packet
     public Packet(byte opcode)
     {
         OpCode = opcode;
-        Signature = 170;
+        Signature = DefaultSignature;
         Sequence = 0;
-        Buffer = new Span<byte>();
+        Buffer = [];
         IsEncrypted = false;
-    }
-
-    /// <summary>
-    ///     Returns the packet data as an ASCII string.
-    /// </summary>
-    /// <param name="replaceNewline">
-    ///     Whether to replace newline characters with spaces. Default is true.
-    /// </param>
-    /// <returns>
-    ///     The packet data as an ASCII string.
-    /// </returns>
-    public readonly string GetAsciiString(bool replaceNewline = true)
-    {
-        var str = Encoding.ASCII.GetString(Buffer);
-
-        if (replaceNewline)
-            str = str.Replace((char)10, ' ')
-                     .Replace((char)13, ' ');
-
-        return str;
     }
 
     /// <summary>
@@ -99,67 +81,59 @@ public ref struct Packet
     /// <returns>
     ///     The packet data as a hexadecimal string.
     /// </returns>
-    public string GetHexString() => $"{OpCode}: {BitConverter.ToString(Buffer.ToArray()).Replace("-", " ")}";
-
-    /// <summary>
-    ///     Converts the packet data to a byte array.
-    /// </summary>
-    /// <returns>
-    ///     The packet data as a byte array.
-    /// </returns>
-    public byte[] ToArray()
-        => ToSpan()
-            .ToArray();
-
-    /// <summary>
-    ///     Converts the packet data to a <see cref="Memory{T}" /> instance.
-    /// </summary>
-    /// <returns>
-    ///     The packet data as a <see cref="Memory{T}" /> instance.
-    /// </returns>
-    public readonly Memory<byte> ToMemory()
+    public string GetHexString()
     {
-        //the length of the packet after the length portion of the header plus the packet tail (determined by encryption type)
-        var resultLength = Buffer.Length + (IsEncrypted ? 5 : 4) - 3;
-        var memBuffer = new byte[resultLength + 3];
+        var prefix = OpCode.ToString() + ": ";
+        var len = Buffer.Length;
 
-        //write packet header
-        memBuffer[0] = Signature;
-        memBuffer[1] = (byte)(resultLength / 256);
-        memBuffer[2] = (byte)(resultLength % 256);
-        memBuffer[3] = OpCode;
-        memBuffer[4] = Sequence;
+        // each byte => "AA " (3 chars), minus trailing space, plus prefix
+        var chars = new char[prefix.Length + (len == 0 ? 0 : (len * 3 - 1))];
+        prefix.AsSpan().CopyTo(chars);
 
-        var memory = new Memory<byte>(memBuffer);
-        Buffer.CopyTo(memory.Span[^Buffer.Length..]);
+        const string hex = "0123456789ABCDEF";
+        var c = prefix.Length;
 
-        return memory;
+        for (var i = 0; i < len; i++)
+        {
+            var b = Buffer[i];
+            chars[c++] = hex[b >> 4];
+            chars[c++] = hex[b & 0xF];
+            if (i != len - 1)
+                chars[c++] = ' ';
+        }
+
+        return new string(chars);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private readonly int GetResultLength() => Buffer.Length + (IsEncrypted ? 5 : 4) - 3;
+
     /// <summary>
-    ///     Converts the packet data to a <see cref="Span{T}" /> instance.
+    ///     Returns the exact number of bytes written on the wire by ToMemory()/ToSpan().
     /// </summary>
-    /// <returns>
-    ///     The packet data as a <see cref="Span{T}" /> instance.
-    /// </returns>
-    public Span<byte> ToSpan()
+    public readonly int GetWireLength() => GetResultLength() + 3;
+
+    /// <summary>
+    ///     Writes the wire-format packet into the provided destination span.
+    ///     Destination must be at least GetWireLength() bytes.
+    /// </summary>
+    public readonly void WriteTo(Span<byte> destination)
     {
-        //the length of the packet after the length portion of the header plus the packet tail (determined by encryption type)
-        var resultLength = Buffer.Length + (IsEncrypted ? 5 : 4) - 3;
+        var resultLength = GetResultLength();
+        var wireLength = resultLength + 3;
 
-        var resultBuffer = new Span<byte>(new byte[resultLength + 3])
-        {
-            //write packet header
-            [0] = Signature,
-            [1] = (byte)(resultLength / 256),
-            [2] = (byte)(resultLength % 256),
-            [3] = OpCode,
-            [4] = Sequence
-        };
+        if ((uint)destination.Length < (uint)wireLength)
+            throw new ArgumentException($"Destination too small. Need {wireLength} bytes.", nameof(destination));
 
-        Buffer.CopyTo(resultBuffer[^Buffer.Length..]);
+        destination[0] = Signature;
+        destination[1] = (byte)(resultLength >> 8);
+        destination[2] = (byte)resultLength;
+        destination[3] = OpCode;
+        destination[4] = Sequence;
 
-        return resultBuffer;
+        // Copy payload to the tail (same behavior as ToMemory)
+        if (!Buffer.IsEmpty)
+            Buffer.CopyTo(destination.Slice(wireLength - Buffer.Length, Buffer.Length));
     }
 
     /// <summary>

@@ -53,6 +53,10 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     private Memory<byte> Memory => _memoryOwner.Memory;
     private Span<byte> Buffer => _memoryOwner.Memory.Span;
+    private readonly MemoryPool<byte> _sendPool = MemoryPool<byte>.Shared;
+    private readonly int _defaultSendCapacity;
+    private int _disposed;
+
 
     private readonly CancellationTokenSource _cts = new();
 
@@ -68,6 +72,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         _memoryOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
         _memoryHandle = _memoryOwner.Memory.Pin();
+        _defaultSendCapacity = Math.Max(1024, MaxPacketLength);
 
         Logger = logger;
         PacketSerializer = packetSerializer;
@@ -282,10 +287,12 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             Encrypt(ref packet);
         }
 
-        // [signature][len_hi][len_lo][opcode][sequence][payload]
-        var memory = packet.ToMemory();
+        var wireLength = packet.GetWireLength();
+        var args = DequeueArgs(wireLength);
 
-        var args = DequeueArgs(memory);
+        // write into the reusable per-SAEA buffer
+        var state = (SendArgsState)args.UserToken!;
+        packet.WriteTo(state.Current.Span);
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
@@ -312,9 +319,12 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             Encrypt(ref packet);
         }
 
-        var memory = packet.ToMemory();
+        var wireLength = packet.GetWireLength();
+        var args = DequeueArgs(wireLength);
 
-        var args = DequeueArgs(memory);
+        // write into the reusable per-SAEA buffer
+        var state = (SendArgsState)args.UserToken!;
+        packet.WriteTo(state.Current.Span);
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
@@ -337,10 +347,29 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     public virtual void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            return;
+
         GC.SuppressFinalize(this);
 
         try { _cts.Cancel(); } catch { }
         try { _cts.Dispose(); } catch { }
+
+        // Drain SAEA pool and dispose their buffers.
+        while (SocketArgsQueue.TryDequeue(out var args))
+        {
+            try
+            {
+                if (args.UserToken is SendArgsState state)
+                {
+                    args.UserToken = null;
+                    state.Dispose();
+                }
+            }
+            catch { }
+
+            try { args.Dispose(); } catch { }
+        }
 
         try { _memoryHandle.Dispose(); } catch { }
         try { _memoryOwner.Dispose(); } catch { }
@@ -354,15 +383,62 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     #region Utility (send pooling)
 
-    /// <summary>
-    ///     Disposes memory owner if present and recycles SAEA back to the queue.
-    /// </summary>
     private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e)
     {
-        if (e.UserToken is IMemoryOwner<byte> mem)
+        // Snapshot disposed flag once
+        var disposed = Volatile.Read(ref _disposed) == 1;
+
+        // If the socket op failed, we should close the transport (unless we're already disposing).
+        // IMPORTANT: this callback runs on the completion path for BOTH send+receive in your extension style.
+        // If you later share the same callback for receive args too, consider branching based on LastOperation.
+        if (!disposed && e.SocketError != SocketError.Success)
         {
-            e.UserToken = null;
-            mem.Dispose();
+            try
+            {
+                Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                      .WithProperty(this)
+                      .LogDebug(
+                          "SocketAsyncEventArgs completed with error. Op={Op} Error={Error} Bytes={Bytes}",
+                          e.LastOperation,
+                          e.SocketError,
+                          e.BytesTransferred);
+            }
+            catch { }
+
+            try { CloseTransport(); } catch { }
+            disposed = Volatile.Read(ref _disposed) == 1;
+        }
+
+        if (disposed)
+        {
+            // Tear down the per-SAEA buffer and the args themselves
+            try
+            {
+                if (e.UserToken is SendArgsState state)
+                {
+                    e.UserToken = null;
+                    state.Dispose();
+                }
+            }
+            catch { }
+
+            try { e.Dispose(); } catch { }
+            return;
+        }
+
+        // Reset view to empty so we don't accidentally resend old length.
+        try
+        {
+            if (e.UserToken is SendArgsState state)
+                e.SetBuffer(state.Owner.Memory.Slice(0, 0));
+            else
+                e.SetBuffer(Memory<byte>.Empty);
+        }
+        catch
+        {
+            // If SetBuffer throws (rare, but can happen if args is in a bad state), don't poison the pool.
+            try { CloseTransport(); } catch { }
+            return;
         }
 
         SocketArgsQueue.Enqueue(e);
@@ -372,17 +448,66 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     {
         var args = new SocketAsyncEventArgs();
         args.Completed += ReuseSocketAsyncEventArgs;
+
+        var owner = _sendPool.Rent(_defaultSendCapacity);
+        args.UserToken = new SendArgsState(owner);
+
+        // Start empty; we set the slice per send.
+        args.SetBuffer(owner.Memory.Slice(0, 0));
         return args;
     }
 
-    private SocketAsyncEventArgs DequeueArgs(Memory<byte> buffer)
+    private SocketAsyncEventArgs DequeueArgs(int requiredLength)
     {
         if (!SocketArgsQueue.TryDequeue(out var args))
             args = CreateArgs();
 
-        args.SetBuffer(buffer);
+        if (args.UserToken is not SendArgsState state)
+        {
+            // Shouldn't happen unless something overwrote UserToken.
+            var owner = _sendPool.Rent(Math.Max(requiredLength, _defaultSendCapacity));
+            state = new SendArgsState(owner);
+            args.UserToken = state;
+        }
+
+        state.EnsureCapacity(requiredLength, _sendPool);
+        args.SetBuffer(state.Current);
+
         return args;
     }
 
     #endregion
+
+    private sealed class SendArgsState : IDisposable
+    {
+        public IMemoryOwner<byte> Owner;
+        public int Capacity;
+        public Memory<byte> Current;
+
+        public SendArgsState(IMemoryOwner<byte> owner)
+        {
+            Owner = owner;
+            Capacity = owner.Memory.Length;
+            Current = default;
+        }
+
+        public void EnsureCapacity(int requiredLength, MemoryPool<byte> pool)
+        {
+            if (Capacity >= requiredLength)
+            {
+                Current = Owner.Memory.Slice(0, requiredLength);
+                return;
+            }
+
+            Owner.Dispose();
+            Owner = pool.Rent(requiredLength);
+            Capacity = Owner.Memory.Length;
+            Current = Owner.Memory.Slice(0, requiredLength);
+        }
+
+        public void Dispose()
+        {
+            Owner.Dispose();
+        }
+    }
 }

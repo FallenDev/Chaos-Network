@@ -1,35 +1,31 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Chaos.Cryptography;
 
-/// <summary>
-///     Provides extensions methods for <see cref="System.Collections.Generic.IReadOnlyCollection{T}" />
-/// </summary>
 [ExcludeFromCodeCoverage]
 public static class Crc
 {
-    /// <summary>
-    ///     Generates a 16bit checksum for a subset of a given span.
-    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ushort Generate16(ReadOnlySpan<byte> data)
     {
         uint checkSum = 0;
+        var table = Tables.TABLE16;
 
-        for (var i = 0; i < data.Length; ++i)
-            checkSum = (ushort)(data[i] ^ (checkSum << 8) ^ Tables.TABLE16[(int)(checkSum >> 8)]);
+        for (var i = 0; i < data.Length; i++)
+            checkSum = (uint)(data[i] ^ (checkSum << 8) ^ table[(int)(checkSum >> 8)]);
 
         return (ushort)checkSum;
     }
 
-    /// <summary>
-    ///     Generates a 32bit checksum for a subset of a given span.
-    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint Generate32(ReadOnlySpan<byte> data)
     {
-        var checkSum = uint.MaxValue;
+        uint checkSum = uint.MaxValue;
+        var table = Tables.TABLE32;
 
-        for (var i = 0; i < data.Length; ++i)
-            checkSum = (checkSum >> 8) ^ Tables.TABLE32[(int)((checkSum & byte.MaxValue) ^ data[i])];
+        for (var i = 0; i < data.Length; i++)
+            checkSum = (checkSum >> 8) ^ table[(int)((checkSum & 0xFF) ^ data[i])];
 
         return ~checkSum;
     }
