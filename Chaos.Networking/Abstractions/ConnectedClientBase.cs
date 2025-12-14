@@ -8,10 +8,10 @@ using Microsoft.Extensions.Logging;
 namespace Chaos.Networking.Abstractions;
 
 /// <summary>
-///     Represents a client that is connected to an <see cref="IServer{T}" />. This class defines the methods used to
+///     Represents a client that is connected to an <see cref="ITcpListener{T}" />. This class defines the methods used to
 ///     communicate with the client.
 /// </summary>
-public abstract class ConnectedClientBase : SocketClientBase, IConnectedClient
+public abstract class ConnectedClientBase : SocketTransportBase, IConnectedClient
 {
     /// <inheritdoc />
     protected ConnectedClientBase(

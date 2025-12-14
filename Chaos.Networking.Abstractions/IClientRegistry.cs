@@ -6,9 +6,9 @@ namespace Chaos.Networking.Abstractions;
 ///     Defines the pattern for a service that clients register to so that they are more easily discovered
 /// </summary>
 /// <typeparam name="T">
-///     A type of client implementing <see cref="Chaos.Networking.Abstractions.ISocketClient" />
+///     A type of client implementing <see cref="Chaos.Networking.Abstractions.ISocketTransport" />
 /// </typeparam>
-public interface IClientRegistry<T> : IEnumerable<T> where T: ISocketClient
+public interface IClientRegistry<T> : IEnumerable<T> where T: ISocketTransport
 {
     /// <summary>
     ///     Gets a client by it's id from the registry

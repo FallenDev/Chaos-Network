@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
 
-using Chaos.Common.Synchronization;
 using Chaos.Cryptography.Abstractions;
 using Chaos.Packets;
 using Chaos.Packets.Abstractions;
@@ -11,7 +10,7 @@ namespace Chaos.Networking.Abstractions;
 /// <summary>
 ///     Defines a pattern for an object that has the ability to send and receive packets over a socket connection
 /// </summary>
-public interface ISocketClient
+public interface ISocketTransport
 {
     /// <summary>
     ///     Handles encryption and decryption of packets
@@ -46,13 +45,13 @@ public interface ISocketClient
     /// <summary>
     ///     Begins an operation that receives data from the socket
     /// </summary>
-    void BeginReceive();
+    void StartReceiveLoop();
 
     /// <summary>
     ///     Disconnects the client from the server and calls the
-    ///     <see cref="Chaos.Networking.Abstractions.ISocketClient.OnDisconnected" /> event
+    ///     <see cref="Chaos.Networking.Abstractions.ISocketTransport.OnDisconnected" /> event
     /// </summary>
-    void Disconnect();
+    void CloseTransport();
 
     /// <summary>
     ///     Immediately releases resources held by the Socket and closes it

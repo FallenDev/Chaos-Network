@@ -3,9 +3,9 @@ using Chaos.Packets;
 namespace Chaos.Networking.Abstractions;
 
 /// <summary>
-///     Defines a pattern for a client that connects to an <see cref="IServer{T}" />
+///     Defines a pattern for a client that connects to an <see cref="ITcpListener{T}" />
 /// </summary>
-public interface IClient : ISocketClient
+public interface IClient : ISocketTransport
 {
     /// <summary>
     ///     The server is sending the client a confirmation that a connection has been established

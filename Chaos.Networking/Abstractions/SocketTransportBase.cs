@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 
 using Chaos.Common.Identity;
 using Chaos.Cryptography.Abstractions;
@@ -24,7 +23,7 @@ namespace Chaos.Networking.Abstractions;
 ///     This minimizes scheduling overhead and removes lock/semaphore contention
 ///     from the packet processing hot path.
 /// </summary>
-public abstract class SocketClientBase : ISocketClient, IDisposable
+public abstract class SocketTransportBase : ISocketTransport, IDisposable
 {
     private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
 
@@ -43,7 +42,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     public ICrypto Crypto { get; set; }
     public bool LogRawPackets { get; set; }
     public uint Id { get; }
-    protected ILogger<SocketClientBase> Logger { get; }
+    protected ILogger<SocketTransportBase> Logger { get; }
     protected IPacketSerializer PacketSerializer { get; }
 
     public IPAddress RemoteIp { get; }
@@ -57,11 +56,11 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
 
     private readonly CancellationTokenSource _cts = new();
 
-    protected SocketClientBase(
+    protected SocketTransportBase(
         Socket socket,
         ICrypto crypto,
         IPacketSerializer packetSerializer,
-        ILogger<SocketClientBase> logger)
+        ILogger<SocketTransportBase> logger)
     {
         Id = SequentialIdGenerator<uint>.Shared.NextId;
         Socket = socket;
@@ -89,14 +88,14 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     ///     Handle a fully framed packet:
     ///     [signature][len_hi][len_lo][opcode][sequence][payload...]
     /// </summary>
-    protected abstract ValueTask HandlePacketAsync(Span<byte> span);
+    protected abstract ValueTask OnPacketAsync(Span<byte> span);
 
     #region Networking
 
     /// <summary>
     ///     Starts the receive loop once per client
     /// </summary>
-    public virtual void BeginReceive()
+    public virtual void StartReceiveLoop()
     {
         if (!Socket.Connected) return;
         if (Interlocked.Exchange(ref _receiveStarted, 1) == 1) return;
@@ -132,14 +131,14 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                 }
                 catch (SocketException)
                 {
-                    Disconnect();
+                    CloseTransport();
                     return;
                 }
 
                 if (bytesRead == 0)
                 {
                     // Remote closed gracefully
-                    Disconnect();
+                    CloseTransport();
                     return;
                 }
 
@@ -165,7 +164,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                                   RemoteIp,
                                   sig,
                                   _count);
-                        Disconnect();
+                        CloseTransport();
                         return;
                     }
 
@@ -188,7 +187,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                                   payloadLength,
                                   frameLength,
                                   _count);
-                        Disconnect();
+                        CloseTransport();
                         return;
                     }
 
@@ -202,7 +201,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                     try
                     {
                         // ToDo: HOT PATH
-                        await HandlePacketAsync(frame).ConfigureAwait(false);
+                        await OnPacketAsync(frame).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -247,14 +246,14 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
                     Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
                           .WithProperty(this)
                           .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
-                    Disconnect();
+                    CloseTransport();
                     return;
                 }
             }
         }
         catch
         {
-            Disconnect();
+            CloseTransport();
         }
     }
 
@@ -322,7 +321,7 @@ public abstract class SocketClientBase : ISocketClient, IDisposable
     public abstract bool IsEncrypted(byte opCode);
     public abstract void Encrypt(ref Packet packet);
 
-    public virtual void Disconnect()
+    public virtual void CloseTransport()
     {
         if (Interlocked.Exchange(ref _disconnecting, 1) == 1) return;
 

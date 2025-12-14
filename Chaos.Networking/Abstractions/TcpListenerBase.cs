@@ -22,7 +22,7 @@ namespace Chaos.Networking.Abstractions;
 /// <typeparam name="T">
 ///     The type of the socket client.
 /// </typeparam>
-public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IConnectedClient
+public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> where T : IConnectedClient
 {
     /// <summary>
     ///     Delegate for handling client packets.
@@ -51,7 +51,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     /// <summary>
     ///     The logger for logging server-related events.
     /// </summary>
-    protected ILogger<ServerBase<T>> Logger { get; }
+    protected ILogger<TcpListenerBase<T>> Logger { get; }
 
     /// <summary>
     ///     The server options for configuring the server instance.
@@ -107,19 +107,19 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
     private long _nextPruneTicks = DateTime.UtcNow.AddMilliseconds(PruneIntervalMs).Ticks;
 
     /// <summary>
-    ///     Initializes a new instance of the <see cref="ServerBase{T}" /> class.
+    ///     Initializes a new instance of the <see cref="TcpListenerBase{T}" /> class.
     /// </summary>
     /// <param name="redirectManager">An instance of a redirect manager.</param>
     /// <param name="packetSerializer">An instance of a packet serializer.</param>
     /// <param name="clientRegistry">An instance of a client registry.</param>
     /// <param name="options">Configuration options for the server.</param>
     /// <param name="logger">A logger for the server.</param>
-    protected ServerBase(
+    protected TcpListenerBase(
         IRedirectManager redirectManager,
         IPacketSerializer packetSerializer,
         IClientRegistry<T> clientRegistry,
         IOptions<ServerOptions> options,
-        ILogger<ServerBase<T>> logger)
+        ILogger<TcpListenerBase<T>> logger)
     {
         Options = options.Value;
         RedirectManager = redirectManager;
@@ -252,7 +252,7 @@ public abstract class ServerBase<T> : BackgroundService, IServer<T> where T : IC
             // Disconnect all connected clients
             foreach (var client in ClientRegistry.ToArray())
             {
-                try { client.Disconnect(); } catch { }
+                try { client.CloseTransport(); } catch { }
             }
 
             Dispose();

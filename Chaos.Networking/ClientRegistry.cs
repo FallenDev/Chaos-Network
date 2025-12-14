@@ -7,7 +7,7 @@ namespace Chaos.Networking;
 /// </summary>
 /// <typeparam name="T">
 /// </typeparam>
-public class ClientRegistry<T> : IClientRegistry<T> where T: ISocketClient
+public class ClientRegistry<T> : IClientRegistry<T> where T: ISocketTransport
 {
     /// <summary>
     ///     The clients that are currently registered
