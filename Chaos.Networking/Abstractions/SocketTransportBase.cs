@@ -100,12 +100,13 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     /// <summary>
     ///     Starts the receive loop once per client
     /// </summary>
-    public virtual void StartReceiveLoop()
+    public virtual async void StartReceiveLoop()
     {
         if (!Socket.Connected) return;
         if (Interlocked.Exchange(ref _receiveStarted, 1) == 1) return;
 
         Connected = true;
+        await Task.Yield();
 
         // Fire-and-forget: the loop owns the socket receive side until disconnect.
         _ = ReceiveLoopAsync(_cts.Token);
