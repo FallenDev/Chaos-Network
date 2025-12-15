@@ -9,13 +9,17 @@ public static class Crc
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ushort Generate16(ReadOnlySpan<byte> data)
     {
-        uint checkSum = 0;
+        ushort crc = 0;
         var table = Tables.TABLE16;
 
-        for (var i = 0; i < data.Length; i++)
-            checkSum = (uint)(data[i] ^ (checkSum << 8) ^ table[(int)(checkSum >> 8)]);
+        for (int i = 0; i < data.Length; i++)
+        {
+            // top byte of crc xor next data byte gives 0..255
+            int idx = ((crc >> 8) ^ data[i]) & 0xFF;
+            crc = (ushort)((crc << 8) ^ table[idx]);
+        }
 
-        return (ushort)checkSum;
+        return crc;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
