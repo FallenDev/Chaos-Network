@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 
@@ -115,144 +116,157 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     {
         try
         {
-            while (!token.IsCancellationRequested && Socket.Connected)
+            long iters = 0;
+            var sw = Stopwatch.StartNew();
+
+            while (!token.IsCancellationRequested)
             {
-                // Read into remaining space in rolling buffer
-                var writeMem = Memory.Slice(_count);
+                iters++;
 
-                int bytesRead;
-                try
+                if (sw.ElapsedMilliseconds >= 1000)
                 {
-                    bytesRead = await Socket.ReceiveAsync(writeMem, SocketFlags.None, token)
-                                            .ConfigureAwait(false);
+                    Logger.LogInformation("SocketTransport Loop iters/sec = {Iters}", Interlocked.Exchange(ref iters, 0));
+                    sw.Restart();
                 }
-                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                while (!token.IsCancellationRequested && Socket.Connected)
                 {
-                    break;
-                }
-                catch (ObjectDisposedException)
-                {
-                    break;
-                }
-                catch (SocketException)
-                {
-                    CloseTransport();
-                    return;
-                }
+                    // Read into remaining space in rolling buffer
+                    var writeMem = Memory.Slice(_count);
 
-                if (bytesRead == 0)
-                {
-                    // Remote closed gracefully
-                    CloseTransport();
-                    return;
-                }
-
-                _count += bytesRead;
-
-                int offset = 0;
-
-                // Process as many complete frames as possible
-                while (true)
-                {
-                    // Need at least 5 bytes: sig + len_hi + len_lo + opcode + seq
-                    if (_count - offset < 5)
-                        break;
-
-                    // Signature check
-                    byte sig = Buffer[offset];
-                    if (sig != 0xAA)
-                    {
-                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                              .WithProperty(this)
-                              .LogWarning(
-                                  "Disconnecting client {RemoteIp} due to bad signature: {Sig} (Buffered={Buffered})",
-                                  RemoteIp,
-                                  sig,
-                                  _count);
-                        CloseTransport();
-                        return;
-                    }
-
-                    // Extract payload length
-                    int lengthHi = Buffer[offset + 1];
-                    int lengthLo = Buffer[offset + 2];
-                    int payloadLength = (lengthHi << 8) | lengthLo;
-
-                    // Full frame length = payload + 3 (sig+len_hi+len_lo)
-                    int frameLength = payloadLength + 3;
-
-                    // Hard safety rails
-                    if (frameLength <= 0 || frameLength > MaxPacketLength)
-                    {
-                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                              .WithProperty(this)
-                              .LogWarning(
-                                  "Disconnecting client {RemoteIp} due to invalid frame length. Payload={Payload}, Frame={Frame}, Buffered={Buffered}",
-                                  RemoteIp,
-                                  payloadLength,
-                                  frameLength,
-                                  _count);
-                        CloseTransport();
-                        return;
-                    }
-
-                    // Not enough bytes yet for full frame
-                    if (_count - offset < frameLength)
-                        break;
-
-                    // We have a complete frame
-                    var frame = Buffer.Slice(offset, frameLength);
-
+                    int bytesRead;
                     try
                     {
-                        // ToDo: HOT PATH
-                        await OnPacketAsync(frame).ConfigureAwait(false);
+                        bytesRead = await Socket.ReceiveAsync(writeMem, SocketFlags.None, token)
+                                                .ConfigureAwait(false);
                     }
-                    catch (Exception ex)
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
                     {
-                        // Heavy logging only when explicitly enabled; otherwise keep the hot path lean.
-                        if (LogRawPackets)
+                        break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+                    catch (SocketException)
+                    {
+                        CloseTransport();
+                        return;
+                    }
+
+                    if (bytesRead == 0)
+                    {
+                        // Remote closed gracefully
+                        CloseTransport();
+                        return;
+                    }
+
+                    _count += bytesRead;
+
+                    int offset = 0;
+
+                    // Process as many complete frames as possible
+                    while (true)
+                    {
+                        // Need at least 5 bytes: sig + len_hi + len_lo + opcode + seq
+                        if (_count - offset < 5)
+                            break;
+
+                        // Signature check
+                        byte sig = Buffer[offset];
+                        if (sig != 0xAA)
                         {
-                            try
-                            {
-                                Logger.WithTopics(
-                                          Topics.Entities.Client,
-                                          Topics.Entities.Packet,
-                                          Topics.Actions.Processing)
-                                      .WithProperty(this)
-                                      .LogError(ex, "Error handling packet (Length={Length})", frameLength);
-                            }
-                            catch { }
+                            Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                                  .WithProperty(this)
+                                  .LogWarning(
+                                      "Disconnecting client {RemoteIp} due to bad signature: {Sig} (Buffered={Buffered})",
+                                      RemoteIp,
+                                      sig,
+                                      _count);
+                            CloseTransport();
+                            return;
                         }
 
-                        // Reset buffer to avoid poisoned state / partial misalignment
-                        _count = 0;
-                        break;
+                        // Extract payload length
+                        int lengthHi = Buffer[offset + 1];
+                        int lengthLo = Buffer[offset + 2];
+                        int payloadLength = (lengthHi << 8) | lengthLo;
+
+                        // Full frame length = payload + 3 (sig+len_hi+len_lo)
+                        int frameLength = payloadLength + 3;
+
+                        // Hard safety rails
+                        if (frameLength <= 0 || frameLength > MaxPacketLength)
+                        {
+                            Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                                  .WithProperty(this)
+                                  .LogWarning(
+                                      "Disconnecting client {RemoteIp} due to invalid frame length. Payload={Payload}, Frame={Frame}, Buffered={Buffered}",
+                                      RemoteIp,
+                                      payloadLength,
+                                      frameLength,
+                                      _count);
+                            CloseTransport();
+                            return;
+                        }
+
+                        // Not enough bytes yet for full frame
+                        if (_count - offset < frameLength)
+                            break;
+
+                        // We have a complete frame
+                        var frame = Buffer.Slice(offset, frameLength);
+
+                        try
+                        {
+                            // ToDo: HOT PATH
+                            await OnPacketAsync(frame).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Heavy logging only when explicitly enabled; otherwise keep the hot path lean.
+                            if (LogRawPackets)
+                            {
+                                try
+                                {
+                                    Logger.WithTopics(
+                                              Topics.Entities.Client,
+                                              Topics.Entities.Packet,
+                                              Topics.Actions.Processing)
+                                          .WithProperty(this)
+                                          .LogError(ex, "Error handling packet (Length={Length})", frameLength);
+                                }
+                                catch { }
+                            }
+
+                            // Reset buffer to avoid poisoned state / partial misalignment
+                            _count = 0;
+                            break;
+                        }
+
+                        offset += frameLength;
+
+                        if (offset >= _count)
+                            break;
                     }
 
-                    offset += frameLength;
+                    // Shift leftover bytes to front
+                    if (offset > 0)
+                    {
+                        _count -= offset;
+                        if (_count > 0)
+                            Buffer.Slice(offset, _count).CopyTo(Buffer);
+                    }
 
-                    if (offset >= _count)
-                        break;
-                }
-
-                // Shift leftover bytes to front
-                if (offset > 0)
-                {
-                    _count -= offset;
-                    if (_count > 0)
-                        Buffer.Slice(offset, _count).CopyTo(Buffer);
-                }
-
-                // If the rolling buffer ever fills without producing a valid frame, drop
-                // This is a "never should happen" rail if a client goes rogue
-                if (_count >= ReceiveBufferSize)
-                {
-                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                          .WithProperty(this)
-                          .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
-                    CloseTransport();
-                    return;
+                    // If the rolling buffer ever fills without producing a valid frame, drop
+                    // This is a "never should happen" rail if a client goes rogue
+                    if (_count >= ReceiveBufferSize)
+                    {
+                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                              .WithProperty(this)
+                              .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
+                        CloseTransport();
+                        return;
+                    }
                 }
             }
         }

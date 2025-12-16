@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 
@@ -191,56 +192,69 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
             // Main accept loop
             while (!stoppingToken.IsCancellationRequested)
             {
-                Socket clientSocket;
+                long iters = 0;
+                var sw = Stopwatch.StartNew();
 
-                try
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    clientSocket = await Socket.AcceptAsync(stoppingToken)
-                                               .ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-                catch (ObjectDisposedException) when (stoppingToken.IsCancellationRequested) { break; }
-                catch (SocketException ex)
-                {
-                    if (Socket.IsBound)
-                        Logger.LogError(ex, "Accept failed on {ServerType}", GetType().Name);
+                    iters++;
 
-                    continue;
-                }
-
-                string ipAddress;
-
-                try
-                {
-                    ipAddress = (clientSocket.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                }
-                catch
-                {
-                    try { clientSocket.Close(); } catch { }
-                    continue;
-                }
-
-                if (!ShouldAcceptConnection(clientSocket, out var rejectReason))
-                {
-                    if (!string.IsNullOrWhiteSpace(rejectReason))
+                    if (sw.ElapsedMilliseconds >= 1000)
                     {
-                        Logger.WithTopics(Topics.Actions.Listening)
-                              .LogInformation("{RejectReason}", rejectReason);
+                        Logger.LogInformation("TcpListener Loop iters/sec = {Iters}", Interlocked.Exchange(ref iters, 0));
+                        sw.Restart();
+                    }
+                    Socket clientSocket;
+
+                    try
+                    {
+                        clientSocket = await Socket.AcceptAsync(stoppingToken)
+                                                   .ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+                    catch (ObjectDisposedException) when (stoppingToken.IsCancellationRequested) { break; }
+                    catch (SocketException ex)
+                    {
+                        if (Socket.IsBound)
+                            Logger.LogError(ex, "Accept failed on {ServerType}", GetType().Name);
+
+                        continue;
                     }
 
-                    try { clientSocket.Close(); } catch { }
-                    continue;
-                }
+                    string ipAddress;
 
-                try
-                {
-                    ConfigureTcpSocket(clientSocket);
-                    OnConnected(clientSocket);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, "Error handling accepted connection on {ServerType}", GetType().Name);
-                    try { clientSocket.Close(); } catch { }
+                    try
+                    {
+                        ipAddress = (clientSocket.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
+                    }
+                    catch
+                    {
+                        try { clientSocket.Close(); } catch { }
+                        continue;
+                    }
+
+                    if (!ShouldAcceptConnection(clientSocket, out var rejectReason))
+                    {
+                        if (!string.IsNullOrWhiteSpace(rejectReason))
+                        {
+                            Logger.WithTopics(Topics.Actions.Listening)
+                                  .LogInformation("{RejectReason}", rejectReason);
+                        }
+
+                        try { clientSocket.Close(); } catch { }
+                        continue;
+                    }
+
+                    try
+                    {
+                        ConfigureTcpSocket(clientSocket);
+                        OnConnected(clientSocket);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Error handling accepted connection on {ServerType}", GetType().Name);
+                        try { clientSocket.Close(); } catch { }
+                    }
                 }
             }
         }
