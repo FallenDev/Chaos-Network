@@ -116,20 +116,29 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     {
         try
         {
-            long iters = 0;
-            var sw = Stopwatch.StartNew();
-
-            while (!token.IsCancellationRequested)
+            while (!token.IsCancellationRequested && Socket.Connected)
             {
-                iters++;
+                long receives = 0;
+                long bytes = 0;
+                var last = Stopwatch.GetTimestamp();
 
-                if (sw.ElapsedMilliseconds >= 1000)
-                {
-                    Logger.LogInformation("SocketTransport Loop iters/sec = {Iters}", Interlocked.Exchange(ref iters, 0));
-                    sw.Restart();
-                }
                 while (!token.IsCancellationRequested && Socket.Connected)
                 {
+                    var writeMem = Memory.Slice(_count);
+
+                    int bytesRead = await Socket.ReceiveAsync(writeMem, SocketFlags.None, token).ConfigureAwait(false);
+
+                    Interlocked.Increment(ref receives);
+                    Interlocked.Add(ref bytes, bytesRead);
+
+                    if (Stopwatch.GetElapsedTime(last) >= TimeSpan.FromSeconds(1))
+                    {
+                        var r = Interlocked.Exchange(ref receives, 0);
+                        var b = Interlocked.Exchange(ref bytes, 0);
+                        Logger.LogInformation("RX: {Receives}/s, {Bytes}/s, buffered={Buffered}", r, b, _count);
+                        last = Stopwatch.GetTimestamp();
+                    }
+
                     // Read into remaining space in rolling buffer
                     var writeMem = Memory.Slice(_count);
 
