@@ -126,8 +126,9 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 {
                     var writeMem = Memory.Slice(_count);
 
-                    int bytesRead = await Socket.ReceiveAsync(writeMem, SocketFlags.None, token).ConfigureAwait(false);
-
+                    int bytesRead;
+                    bytesRead = await Socket.ReceiveAsync(writeMem, SocketFlags.None, token)
+                                            .ConfigureAwait(false);
                     Interlocked.Increment(ref receives);
                     Interlocked.Add(ref bytes, bytesRead);
 
@@ -137,29 +138,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                         var b = Interlocked.Exchange(ref bytes, 0);
                         Logger.LogInformation("RX: {Receives}/s, {Bytes}/s, buffered={Buffered}", r, b, _count);
                         last = Stopwatch.GetTimestamp();
-                    }
-
-                    // Read into remaining space in rolling buffer
-                    var writeMem = Memory.Slice(_count);
-
-                    int bytesRead;
-                    try
-                    {
-                        bytesRead = await Socket.ReceiveAsync(writeMem, SocketFlags.None, token)
-                                                .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (token.IsCancellationRequested)
-                    {
-                        break;
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        break;
-                    }
-                    catch (SocketException)
-                    {
-                        CloseTransport();
-                        return;
                     }
 
                     if (bytesRead == 0)
