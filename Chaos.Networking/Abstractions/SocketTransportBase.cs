@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 
@@ -118,142 +117,150 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         {
             while (!token.IsCancellationRequested && Socket.Connected)
             {
-                long receives = 0;
-                long bytes = 0;
-                var last = Stopwatch.GetTimestamp();
+                // We only consider this "progress" if we advanced parsing state
+                // (processed a full frame and/or consumed bytes from the rolling buffer).
+                var madeProgress = false;
+                // Read into remaining space in rolling buffer
+                var writeMem = Memory.Slice(_count);
 
-                while (!token.IsCancellationRequested && Socket.Connected)
+                int bytesRead;
+                try
                 {
-                    var writeMem = Memory.Slice(_count);
-
-                    int bytesRead;
                     bytesRead = await Socket.ReceiveAsync(writeMem, SocketFlags.None, token)
                                             .ConfigureAwait(false);
-                    Interlocked.Increment(ref receives);
-                    Interlocked.Add(ref bytes, bytesRead);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
+                catch (ObjectDisposedException) { break; }
+                catch (SocketException) { CloseTransport(); return; }
 
-                    if (Stopwatch.GetElapsedTime(last) >= TimeSpan.FromSeconds(1))
-                    {
-                        var r = Interlocked.Exchange(ref receives, 0);
-                        var b = Interlocked.Exchange(ref bytes, 0);
-                        Logger.LogInformation("RX: {Receives}/s, {Bytes}/s, buffered={Buffered}", r, b, _count);
-                        last = Stopwatch.GetTimestamp();
-                    }
+                // Remote closed connection
+                if (bytesRead == 0)
+                {
+                    CloseTransport();
+                    return;
+                }
 
-                    if (bytesRead == 0)
-                    {
-                        // Remote closed gracefully
-                        CloseTransport();
-                        return;
-                    }
+                _count += bytesRead;
 
-                    _count += bytesRead;
+                int offset = 0;
+                var processedFrame = false;
 
-                    int offset = 0;
+                while (true)
+                {
+                    // Need at least 5 bytes: sig + len_hi + len_lo + opcode + seq
+                    if (_count - offset < 5)
+                        break;
 
-                    // Process as many complete frames as possible
-                    while (true)
-                    {
-                        // Need at least 5 bytes: sig + len_hi + len_lo + opcode + seq
-                        if (_count - offset < 5)
-                            break;
-
-                        // Signature check
-                        byte sig = Buffer[offset];
-                        if (sig != 0xAA)
-                        {
-                            Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                                  .WithProperty(this)
-                                  .LogWarning(
-                                      "Disconnecting client {RemoteIp} due to bad signature: {Sig} (Buffered={Buffered})",
-                                      RemoteIp,
-                                      sig,
-                                      _count);
-                            CloseTransport();
-                            return;
-                        }
-
-                        // Extract payload length
-                        int lengthHi = Buffer[offset + 1];
-                        int lengthLo = Buffer[offset + 2];
-                        int payloadLength = (lengthHi << 8) | lengthLo;
-
-                        // Full frame length = payload + 3 (sig+len_hi+len_lo)
-                        int frameLength = payloadLength + 3;
-
-                        // Hard safety rails
-                        if (frameLength <= 0 || frameLength > MaxPacketLength)
-                        {
-                            Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                                  .WithProperty(this)
-                                  .LogWarning(
-                                      "Disconnecting client {RemoteIp} due to invalid frame length. Payload={Payload}, Frame={Frame}, Buffered={Buffered}",
-                                      RemoteIp,
-                                      payloadLength,
-                                      frameLength,
-                                      _count);
-                            CloseTransport();
-                            return;
-                        }
-
-                        // Not enough bytes yet for full frame
-                        if (_count - offset < frameLength)
-                            break;
-
-                        // We have a complete frame
-                        var frame = Buffer.Slice(offset, frameLength);
-
-                        try
-                        {
-                            // ToDo: HOT PATH
-                            await OnPacketAsync(frame).ConfigureAwait(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            // Heavy logging only when explicitly enabled; otherwise keep the hot path lean.
-                            if (LogRawPackets)
-                            {
-                                try
-                                {
-                                    Logger.WithTopics(
-                                              Topics.Entities.Client,
-                                              Topics.Entities.Packet,
-                                              Topics.Actions.Processing)
-                                          .WithProperty(this)
-                                          .LogError(ex, "Error handling packet (Length={Length})", frameLength);
-                                }
-                                catch { }
-                            }
-
-                            // Reset buffer to avoid poisoned state / partial misalignment
-                            _count = 0;
-                            break;
-                        }
-
-                        offset += frameLength;
-
-                        if (offset >= _count)
-                            break;
-                    }
-
-                    // Shift leftover bytes to front
-                    if (offset > 0)
-                    {
-                        _count -= offset;
-                        if (_count > 0)
-                            Buffer.Slice(offset, _count).CopyTo(Buffer);
-                    }
-
-                    // If the rolling buffer ever fills without producing a valid frame, drop
-                    // This is a "never should happen" rail if a client goes rogue
-                    if (_count >= ReceiveBufferSize)
+                    // Signature check
+                    byte sig = Buffer[offset];
+                    if (sig != 0xAA)
                     {
                         Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
                               .WithProperty(this)
-                              .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
+                              .LogWarning(
+                                  "Disconnecting client {RemoteIp} due to bad signature: {Sig} (Buffered={Buffered})",
+                                  RemoteIp,
+                                  sig,
+                                  _count);
                         CloseTransport();
                         return;
                     }
+
+                    // Extract payload length
+                    int lengthHi = Buffer[offset + 1];
+                    int lengthLo = Buffer[offset + 2];
+                    int payloadLength = (lengthHi << 8) | lengthLo;
+
+                    // Full frame length = payload + 3 (sig+len_hi+len_lo)
+                    int frameLength = payloadLength + 3;
+
+                    // Hard safety rails
+                    if (frameLength <= 0 || frameLength > MaxPacketLength)
+                    {
+                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                              .WithProperty(this)
+                              .LogWarning(
+                                  "Disconnecting client {RemoteIp} due to invalid frame length. Payload={Payload}, Frame={Frame}, Buffered={Buffered}",
+                                  RemoteIp,
+                                  payloadLength,
+                                  frameLength,
+                                  _count);
+                        CloseTransport();
+                        return;
+                    }
+
+                    // Not enough bytes yet for a full frame
+                    if (_count - offset < frameLength)
+                        break;
+
+                    var frame = Buffer.Slice(offset, frameLength);
+
+                    try
+                    {
+                        // ToDo: HOT PATH
+                        await OnPacketAsync(frame).ConfigureAwait(false);
+                        processedFrame = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Heavy logging only when explicitly enabled; otherwise keep the hot path lean.
+                        if (LogRawPackets)
+                        {
+                            try
+                            {
+                                Logger.WithTopics(
+                                          Topics.Entities.Client,
+                                          Topics.Entities.Packet,
+                                          Topics.Actions.Processing)
+                                      .WithProperty(this)
+                                      .LogError(ex, "Error handling packet (Length={Length})", frameLength);
+                            }
+                            catch { }
+                        }
+
+                        // Reset buffer to avoid poisoned state / partial misalignment
+                        _count = 0;
+                        // Force a yield to avoid tight exception spin
+                        madeProgress = false;
+                        break;
+                    }
+
+                    offset += frameLength;
+
+                    if (offset >= _count)
+                        break;
+                }
+
+                // Shift leftover bytes to front
+                if (offset > 0)
+                {
+                    _count -= offset;
+
+                    if (_count > 0)
+                        Buffer.Slice(offset, _count).CopyTo(Buffer);
+
+                    // We consumed bytes from the rolling buffer
+                    madeProgress = true;
+                }
+
+                if (processedFrame)
+                    madeProgress = true;
+
+                // If the rolling buffer ever fills without producing a valid frame, drop
+                // This is a "never should happen" rail if a client goes rogue
+                if (_count >= ReceiveBufferSize)
+                {
+                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                          .WithProperty(this)
+                          .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
+                    CloseTransport();
+                    return;
+                }
+
+                if (!madeProgress)
+                {
+                    // Yield to prevent tight loop if we didn't process any packets
+                    await Task.Yield();
                 }
             }
         }
