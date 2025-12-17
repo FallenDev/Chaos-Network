@@ -34,7 +34,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     private const int ReceiveBufferSize = 64 * 1024;
     // Max packet length (including header) per protocol spec
-    public virtual int MaxPacketLength { get; } = 4 * 1024;
+    public virtual int MaxPacketLength { get; } = 8 * 1024;
 
     private int _sequence;
 
@@ -69,9 +69,11 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         Id = SequentialIdGenerator<uint>.Shared.NextId;
         Socket = socket;
         Crypto = crypto;
+        SocketExtensions.ConfigureTcpSocket(Socket);
 
         _memoryOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
         _memoryHandle = _memoryOwner.Memory.Pin();
+
         _defaultSendCapacity = Math.Max(1024, MaxPacketLength);
 
         Logger = logger;
@@ -117,9 +119,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         {
             while (!token.IsCancellationRequested && Socket.Connected)
             {
-                // We only consider this "progress" if we advanced parsing state
-                // (processed a full frame and/or consumed bytes from the rolling buffer).
-                var madeProgress = false;
                 // Read into remaining space in rolling buffer
                 var writeMem = Memory.Slice(_count);
 
@@ -143,7 +142,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 _count += bytesRead;
 
                 int offset = 0;
-                var processedFrame = false;
 
                 while (true)
                 {
@@ -199,7 +197,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     {
                         // ToDo: HOT PATH
                         await OnPacketAsync(frame).ConfigureAwait(false);
-                        processedFrame = true;
                     }
                     catch (Exception ex)
                     {
@@ -220,8 +217,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
                         // Reset buffer to avoid poisoned state / partial misalignment
                         _count = 0;
-                        // Force a yield to avoid tight exception spin
-                        madeProgress = false;
                         break;
                     }
 
@@ -238,13 +233,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
                     if (_count > 0)
                         Buffer.Slice(offset, _count).CopyTo(Buffer);
-
-                    // We consumed bytes from the rolling buffer
-                    madeProgress = true;
                 }
-
-                if (processedFrame)
-                    madeProgress = true;
 
                 // If the rolling buffer ever fills without producing a valid frame, drop
                 // This is a "never should happen" rail if a client goes rogue
@@ -255,12 +244,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                           .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
                     CloseTransport();
                     return;
-                }
-
-                if (!madeProgress)
-                {
-                    // Yield to prevent tight loop if we didn't process any packets
-                    await Task.Yield();
                 }
             }
         }

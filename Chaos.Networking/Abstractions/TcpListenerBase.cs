@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 
 using Chaos.Common.Synchronization;
+using Chaos.Extensions.Networking;
 using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
 using Chaos.Networking.Options;
@@ -128,7 +129,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         PacketSerializer = packetSerializer;
         ClientHandlers = new ClientHandler?[byte.MaxValue];
         Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        ConfigureTcpSocket(Socket);
+        SocketExtensions.ConfigureTcpSocket(Socket);
         Sync = new FifoAutoReleasingSemaphoreSlim(1, 15, $"{GetType().Name}");
         IndexHandlers();
     }
@@ -234,7 +235,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
 
                 try
                 {
-                    ConfigureTcpSocket(clientSocket);
+                    SocketExtensions.ConfigureTcpSocket(clientSocket);
                     OnConnected(clientSocket);
                 }
                 catch (Exception ex)
@@ -345,22 +346,6 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
             if (kvp.Value.LastConnection < cutoff)
                 ConnectionAttempts.TryRemove(kvp.Key, out _);
         }
-    }
-
-    private static void ConfigureTcpSocket(Socket tcpSocket)
-    {
-        // The socket will not linger when Socket.Close is called
-        tcpSocket.LingerState = new LingerOption(false, 0);
-
-        // Disable the Nagle Algorithm for low-latency communication
-        tcpSocket.NoDelay = true;
-
-        // Kernel buffers sized for typical game traffic (tuned separately from app-level buffers)
-        tcpSocket.ReceiveBufferSize = 64 * 1024;
-        tcpSocket.SendBufferSize = 64 * 1024;
-
-        // Enable TCP keep-alive to detect stale connections
-        tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
     }
 
     #region Handlers
