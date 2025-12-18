@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Channels;
 
 using Chaos.Common.Identity;
 using Chaos.Cryptography.Abstractions;
@@ -19,9 +20,10 @@ namespace Chaos.Networking.Abstractions;
 ///      - One async receive loop per connection (no SAEA callback reentrancy)
 ///      - Rolling buffer parses as many complete frames as possible per read
 ///      - Keeps leftover bytes and continues reading into remaining buffer space
-///
-///     This minimizes scheduling overhead and removes lock/semaphore contention
-///     from the packet processing hot path.
+///     Packet processing is decoupled from receiving:
+///      - Receive loop parses frames and enqueues them
+///      - ProcessInboundAsync runs OnPacketAsync sequentially (per-client order preserved)
+///      - Avoids long processing times blocking the receive loop
 /// </summary>
 public abstract class SocketTransportBase : ISocketTransport, IDisposable
 {
@@ -53,10 +55,32 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     private Memory<byte> Memory => _memoryOwner.Memory;
     private Span<byte> Buffer => _memoryOwner.Memory.Span;
+
     private readonly MemoryPool<byte> _sendPool = MemoryPool<byte>.Shared;
     private readonly int _defaultSendCapacity;
     private int _disposed;
 
+    private readonly Channel<InboundFrame> _inbound =
+    Channel.CreateBounded<InboundFrame>(new BoundedChannelOptions(256)
+    {
+        SingleWriter = true,
+        SingleReader = true,
+        FullMode = BoundedChannelFullMode.Wait
+    });
+
+    private Task? _processTask;
+
+    private readonly struct InboundFrame
+    {
+        public readonly IMemoryOwner<byte> Owner;
+        public readonly int Length;
+
+        public InboundFrame(IMemoryOwner<byte> owner, int length)
+        {
+            Owner = owner;
+            Length = length;
+        }
+    }
 
     private readonly CancellationTokenSource _cts = new();
 
@@ -109,8 +133,67 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         Connected = true;
 
-        // Fire-and-forget: the loop owns the socket receive side until disconnect.
+        // Processing loop preserves ordering but decouples from socket receive
+        _processTask = ProcessInboundAsync(_cts.Token);
+        // Receive loop parses frames and enqueues them
         _ = ReceiveLoopAsync(_cts.Token);
+    }
+
+    private async Task ProcessInboundAsync(CancellationToken token)
+    {
+        try
+        {
+            var reader = _inbound.Reader;
+
+            while (await reader.WaitToReadAsync(token).ConfigureAwait(false))
+            {
+                while (reader.TryRead(out var item))
+                {
+                    try
+                    {
+                        var span = item.Owner.Memory.Span.Slice(0, item.Length);
+                        await OnPacketAsync(span).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (LogRawPackets)
+                        {
+                            try
+                            {
+                                Logger.WithTopics(
+                                          Topics.Entities.Client,
+                                          Topics.Entities.Packet,
+                                          Topics.Actions.Processing)
+                                      .WithProperty(this)
+                                      .LogError(ex, "Error handling inbound packet (Length={Length})", item.Length);
+                            }
+                            catch { }
+                        }
+
+                        try { CloseTransport(); } catch { }
+                        return;
+                    }
+                    finally
+                    {
+                        try { item.Owner.Dispose(); } catch { }
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch { try { CloseTransport(); } catch { } }
+        finally
+        {
+            // Drain any remaining queued frames and dispose owners (prevents pool leaks on shutdown).
+            try
+            {
+                while (_inbound.Reader.TryRead(out var leftover))
+                {
+                    try { leftover.Owner.Dispose(); } catch { }
+                }
+            }
+            catch { }
+        }
     }
 
     private async Task ReceiveLoopAsync(CancellationToken token)
@@ -191,33 +274,20 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     if (_count - offset < frameLength)
                         break;
 
-                    var frame = Buffer.Slice(offset, frameLength);
+                    var frameSpan = Buffer.Slice(offset, frameLength);
 
+                    IMemoryOwner<byte> owner = MemoryPool<byte>.Shared.Rent(frameLength);
                     try
                     {
-                        // ToDo: HOT PATH
-                        await OnPacketAsync(frame).ConfigureAwait(false);
+                        frameSpan.CopyTo(owner.Memory.Span.Slice(0, frameLength));
+                        await _inbound.Writer.WriteAsync(new InboundFrame(owner, frameLength), token)
+                                      .ConfigureAwait(false);
                     }
-                    catch (Exception ex)
+                    catch
                     {
-                        // Heavy logging only when explicitly enabled; otherwise keep the hot path lean.
-                        if (LogRawPackets)
-                        {
-                            try
-                            {
-                                Logger.WithTopics(
-                                          Topics.Entities.Client,
-                                          Topics.Entities.Packet,
-                                          Topics.Actions.Processing)
-                                      .WithProperty(this)
-                                      .LogError(ex, "Error handling packet (Length={Length})", frameLength);
-                            }
-                            catch { }
-                        }
-
-                        // Reset buffer to avoid poisoned state / partial misalignment
-                        _count = 0;
-                        break;
+                        // If enqueue fails, we own the rent, so dispose it
+                        try { owner.Dispose(); } catch { }
+                        throw;
                     }
 
                     offset += frameLength;
@@ -328,8 +398,8 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         Connected = false;
 
+        try { _inbound.Writer.TryComplete(); } catch { }
         try { _cts.Cancel(); } catch { }
-
         try { Socket.Shutdown(SocketShutdown.Both); } catch { }
         try { OnDisconnected?.Invoke(this, EventArgs.Empty); } catch { }
 
@@ -343,6 +413,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         GC.SuppressFinalize(this);
 
+        try { _inbound.Writer.TryComplete(); } catch { }
         try { _cts.Cancel(); } catch { }
         try { _cts.Dispose(); } catch { }
 
@@ -379,9 +450,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         // Snapshot disposed flag once
         var disposed = Volatile.Read(ref _disposed) == 1;
 
-        // If the socket op failed, we should close the transport (unless we're already disposing).
-        // IMPORTANT: this callback runs on the completion path for BOTH send+receive in your extension style.
-        // If you later share the same callback for receive args too, consider branching based on LastOperation.
         if (!disposed && e.SocketError != SocketError.Success)
         {
             try
@@ -417,7 +485,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             return;
         }
 
-        // Reset view to empty so we don't accidentally resend old length.
+        // Reset view to empty so we don't resend old length
         try
         {
             if (e.UserToken is SendArgsState state)
@@ -427,7 +495,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         }
         catch
         {
-            // If SetBuffer throws (rare, but can happen if args is in a bad state), don't poison the pool.
+            // If SetBuffer throws (rare, but can happen if args is in a bad state), don't poison the pool
             try { CloseTransport(); } catch { }
             return;
         }
