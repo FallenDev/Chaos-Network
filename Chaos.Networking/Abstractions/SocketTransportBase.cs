@@ -24,18 +24,16 @@ namespace Chaos.Networking.Abstractions;
 /// </summary>
 public abstract class SocketTransportBase : ISocketTransport, IDisposable
 {
-    private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
-
-    // Bytes currently in rolling buffer
-    private int _count;
-    private int _disconnecting;
-    private int _receiveStarted;
+    private readonly ConcurrentQueue<SocketAsyncEventArgs> _socketArgsQueue;
 
     private const int ReceiveBufferSize = 64 * 1024;
-    // Max packet length (including header) per protocol spec
     public virtual int MaxPacketLength { get; } = 8 * 1024;
 
+    private int _count;
     private int _sequence;
+    private int _disconnecting;
+    private int _receiveStarted;
+    private int _disposed;
 
     public bool Connected { get; set; }
     public ICrypto Crypto { get; set; }
@@ -48,40 +46,26 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     public IPAddress RemoteIp { get; }
     public Socket Socket { get; }
 
-    private readonly IMemoryOwner<byte> _memoryOwner;
-    private readonly MemoryHandle _memoryHandle;
+    private readonly IMemoryOwner<byte> _recvOwner;
+    private readonly MemoryHandle _recvHandle;
 
-    private Memory<byte> Memory => _memoryOwner.Memory;
-    private Span<byte> Buffer => _memoryOwner.Memory.Span;
+    private Memory<byte> RecvMemory => _recvOwner.Memory;
+    private Span<byte> RecvBuffer => _recvOwner.Memory.Span;
 
     // Send pooling
     private readonly MemoryPool<byte> _sendPool = MemoryPool<byte>.Shared;
     private readonly int _defaultSendCapacity;
 
-    // Inbound processing queue
-    private readonly Channel<InboundFrame> _inbound =
-    Channel.CreateBounded<InboundFrame>(new BoundedChannelOptions(256)
-    {
-        SingleWriter = true,
-        SingleReader = true,
-        // If the channel is full, drop the write (causes disconnect in receive loop)
-        FullMode = BoundedChannelFullMode.DropWrite
-    });
+    // Inbound processing queue (backpressure)
+    private readonly Channel<InboundFrame> _inbound;
 
     private Task? _processTask;
-    private int _disposed;
     private readonly CancellationTokenSource _cts = new();
 
-    private readonly struct InboundFrame
+    private readonly struct InboundFrame(IMemoryOwner<byte> owner, int length)
     {
-        public readonly IMemoryOwner<byte> Owner;
-        public readonly int Length;
-
-        public InboundFrame(IMemoryOwner<byte> owner, int length)
-        {
-            Owner = owner;
-            Length = length;
-        }
+        public readonly IMemoryOwner<byte> Owner = owner;
+        public readonly int Length = length;
     }
 
     protected SocketTransportBase(
@@ -91,23 +75,32 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         ILogger<SocketTransportBase> logger)
     {
         Id = SequentialIdGenerator<uint>.Shared.NextId;
+
         Socket = socket;
         Crypto = crypto;
-
         SocketExtensions.ConfigureTcpSocket(Socket);
-
-        _memoryOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
-        _memoryHandle = _memoryOwner.Memory.Pin();
-
-        _defaultSendCapacity = Math.Max(1024, MaxPacketLength);
 
         Logger = logger;
         PacketSerializer = packetSerializer;
 
         RemoteIp = (Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
 
+
+        _recvOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
+        _recvHandle = _recvOwner.Memory.Pin();
+
+        _defaultSendCapacity = Math.Max(1024, MaxPacketLength);
+
+        // Backpressure queue
+        _inbound = Channel.CreateBounded<InboundFrame>(new BoundedChannelOptions(1024)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = true,
+            SingleWriter = true
+        });
+
         var initialArgs = Enumerable.Range(0, 10).Select(_ => CreateArgs());
-        SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
+        _socketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
 
         Connected = false;
     }
@@ -206,7 +199,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             while (!token.IsCancellationRequested && Socket.Connected)
             {
                 // Read into remaining space in rolling buffer
-                var writeMem = Memory.Slice(_count);
+                var writeMem = RecvMemory.Slice(_count);
 
                 int bytesRead;
                 try
@@ -236,7 +229,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                         break;
 
                     // Signature check
-                    byte sig = Buffer[offset];
+                    byte sig = RecvBuffer[offset];
                     if (sig != 0xAA)
                     {
                         Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
@@ -252,8 +245,8 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     }
 
                     // Extract payload length
-                    int lengthHi = Buffer[offset + 1];
-                    int lengthLo = Buffer[offset + 2];
+                    int lengthHi = RecvBuffer[offset + 1];
+                    int lengthLo = RecvBuffer[offset + 2];
                     int payloadLength = (lengthHi << 8) | lengthLo;
 
                     // Full frame length = payload + 3 (sig+len_hi+len_lo)
@@ -280,28 +273,17 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                         break;
 
                     // Complete frame, copy it to pooled memory and enqueue
-                    IMemoryOwner<byte> owner = MemoryPool<byte>.Shared.Rent(frameLength);
+                    var owner = MemoryPool<byte>.Shared.Rent(frameLength);
                     try
                     {
-                        Buffer.Slice(offset, frameLength)
+                        RecvBuffer.Slice(offset, frameLength)
                               .CopyTo(owner.Memory.Span.Slice(0, frameLength));
 
-                        // Never block here; if queue is full, disconnect
-                        if (!writer.TryWrite(new InboundFrame(owner, frameLength)))
-                        {
-                            try { owner.Dispose(); } catch { }
-
-                            Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                                  .WithProperty(this)
-                                  .LogWarning("Inbound queue overflow for {RemoteIp}. Disconnecting to avoid receive stalls.", RemoteIp);
-
-                            CloseTransport();
-                            return;
-                        }
+                        await writer.WriteAsync(new InboundFrame(owner, frameLength), token)
+                                    .ConfigureAwait(false);
                     }
                     catch
                     {
-                        // If enqueue/copy fails, dispose owner
                         try { owner.Dispose(); } catch { }
                         throw;
                     }
@@ -318,7 +300,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     _count -= offset;
 
                     if (_count > 0)
-                        Buffer.Slice(offset, _count).CopyTo(Buffer);
+                        RecvBuffer.Slice(offset, _count).CopyTo(RecvBuffer);
                 }
 
                 // If the rolling buffer ever fills without producing a valid frame, drop
@@ -367,10 +349,9 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         var wireLength = packet.GetWireLength();
         var args = DequeueArgs(wireLength);
 
-        // write into the reusable per-SAEA buffer
+        // Write into the reusable per-SAEA buffer
         var state = (SendArgsState)args.UserToken!;
         packet.WriteTo(state.Current.Span);
-
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
@@ -400,10 +381,9 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         var wireLength = packet.GetWireLength();
         var args = DequeueArgs(wireLength);
 
-        // write into the reusable per-SAEA buffer
+        // Write into the reusable per-SAEA buffer
         var state = (SendArgsState)args.UserToken!;
         packet.WriteTo(state.Current.Span);
-
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
@@ -436,7 +416,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         try { _cts.Dispose(); } catch { }
 
         // Drain SAEA pool and dispose their buffers.
-        while (SocketArgsQueue.TryDequeue(out var args))
+        while (_socketArgsQueue.TryDequeue(out var args))
         {
             try
             {
@@ -451,8 +431,8 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             try { args.Dispose(); } catch { }
         }
 
-        try { _memoryHandle.Dispose(); } catch { }
-        try { _memoryOwner.Dispose(); } catch { }
+        try { _recvHandle.Dispose(); } catch { }
+        try { _recvOwner.Dispose(); } catch { }
 
         try { Socket.Close(); } catch { }
     }
@@ -518,7 +498,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             return;
         }
 
-        SocketArgsQueue.Enqueue(e);
+        _socketArgsQueue.Enqueue(e);
     }
 
     private SocketAsyncEventArgs CreateArgs()
@@ -536,7 +516,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     private SocketAsyncEventArgs DequeueArgs(int requiredLength)
     {
-        if (!SocketArgsQueue.TryDequeue(out var args))
+        if (!_socketArgsQueue.TryDequeue(out var args))
             args = CreateArgs();
 
         if (args.UserToken is not SendArgsState state)
@@ -553,20 +533,11 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         return args;
     }
 
-    #endregion
-
-    private sealed class SendArgsState : IDisposable
+    private sealed class SendArgsState(IMemoryOwner<byte> owner) : IDisposable
     {
-        public IMemoryOwner<byte> Owner;
-        public int Capacity;
-        public Memory<byte> Current;
-
-        public SendArgsState(IMemoryOwner<byte> owner)
-        {
-            Owner = owner;
-            Capacity = owner.Memory.Length;
-            Current = default;
-        }
+        public IMemoryOwner<byte> Owner = owner;
+        public int Capacity = owner.Memory.Length;
+        public Memory<byte> Current = default;
 
         public void EnsureCapacity(int requiredLength, MemoryPool<byte> pool)
         {
@@ -584,4 +555,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         public void Dispose() => Owner.Dispose();
     }
+
+    #endregion
 }
