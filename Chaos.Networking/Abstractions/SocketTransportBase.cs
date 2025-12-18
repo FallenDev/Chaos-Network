@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading.Channels;
 
 using Chaos.Common.Identity;
@@ -25,6 +26,7 @@ namespace Chaos.Networking.Abstractions;
 public abstract class SocketTransportBase : ISocketTransport, IDisposable
 {
     private readonly ConcurrentQueue<SocketAsyncEventArgs> _socketArgsQueue;
+    private readonly ConcurrentQueue<SocketAsyncEventArgs> _batchArgsQueue;
 
     private const int ReceiveBufferSize = 64 * 1024;
     public virtual int MaxPacketLength { get; } = 8 * 1024;
@@ -101,6 +103,10 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         var initialArgs = Enumerable.Range(0, 10).Select(_ => CreateArgs());
         _socketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
+
+        // Batch args are separate so BufferList sends don't pollute the normal send pool
+        var initialBatchArgs = Enumerable.Range(0, 4).Select(_ => CreateBatchArgs());
+        _batchArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialBatchArgs);
 
         Connected = false;
     }
@@ -387,6 +393,49 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
+    public void SendBatch<T1, T2, T3>(T1 a, T2 b, T3 c)
+    where T1 : IPacketSerializable
+    where T2 : IPacketSerializable
+    where T3 : IPacketSerializable
+    {
+        if (!Connected || !Socket.Connected) return;
+
+        // Rent per packet (pooled), but send as one gather-write.
+        var p1 = PacketSerializer.Serialize(a);
+        var p2 = PacketSerializer.Serialize(b);
+        var p3 = PacketSerializer.Serialize(c);
+
+        PrepareOutbound(ref p1);
+        PrepareOutbound(ref p2);
+        PrepareOutbound(ref p3);
+
+        var owner1 = p1.RentWireBuffer(out var m1);
+        var owner2 = p2.RentWireBuffer(out var m2);
+        var owner3 = p3.RentWireBuffer(out var m3);
+
+        var args = DequeueBatchArgs();
+        var batch = (BatchSendState)args.UserToken!;
+
+        batch.Clear();
+        batch.Add(owner1, m1);
+        batch.Add(owner2, m2);
+        batch.Add(owner3, m3);
+
+        args.BufferList = batch.Segments;
+
+        Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
+    }
+
+    private void PrepareOutbound(ref Packet packet)
+    {
+        packet.IsEncrypted = IsEncrypted(packet.OpCode);
+        if (packet.IsEncrypted)
+        {
+            packet.Sequence = (byte)(Interlocked.Increment(ref _sequence) - 1);
+            Encrypt(ref packet);
+        }
+    }
+
     public abstract bool IsEncrypted(byte opCode);
     public abstract void Encrypt(ref Packet packet);
 
@@ -420,15 +469,30 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         {
             try
             {
-                if (args.UserToken is SendArgsState state)
+                if (args.UserToken is IDisposable d)
                 {
                     args.UserToken = null;
-                    state.Dispose();
+                    d.Dispose();
                 }
             }
             catch { }
 
             try { args.Dispose(); } catch { }
+        }
+
+        while (_batchArgsQueue.TryDequeue(out var batchArgs))
+        {
+            try
+            {
+                if (batchArgs.UserToken is IDisposable d)
+                {
+                    batchArgs.UserToken = null;
+                    d.Dispose();
+                }
+            }
+            catch { }
+
+            try { batchArgs.Dispose(); } catch { }
         }
 
         try { _recvHandle.Dispose(); } catch { }
@@ -466,15 +530,18 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             disposed = Volatile.Read(ref _disposed) == 1;
         }
 
+        // BufferList MUST be cleared before reuse
+        try { e.BufferList = null; } catch { }
+
         if (disposed)
         {
             // Tear down the per-SAEA buffer and the args themselves
             try
             {
-                if (e.UserToken is SendArgsState state)
+                if (e.UserToken is IDisposable d)
                 {
                     e.UserToken = null;
-                    state.Dispose();
+                    d.Dispose();
                 }
             }
             catch { }
@@ -498,7 +565,10 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             return;
         }
 
-        _socketArgsQueue.Enqueue(e);
+        if (e.UserToken is BatchSendState)
+            _batchArgsQueue.Enqueue(e);
+        else
+            _socketArgsQueue.Enqueue(e);
     }
 
     private SocketAsyncEventArgs CreateArgs()
@@ -514,6 +584,18 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         return args;
     }
 
+    private SocketAsyncEventArgs CreateBatchArgs()
+    {
+        var args = new SocketAsyncEventArgs();
+        args.Completed += ReuseSocketAsyncEventArgs;
+
+        args.UserToken = new BatchSendState();
+
+        // Start empty; BufferList will be assigned per batch send.
+        args.SetBuffer(Memory<byte>.Empty);
+        return args;
+    }
+
     private SocketAsyncEventArgs DequeueArgs(int requiredLength)
     {
         if (!_socketArgsQueue.TryDequeue(out var args))
@@ -522,6 +604,11 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         if (args.UserToken is not SendArgsState state)
         {
             // Shouldn't happen unless something overwrote UserToken.
+            if (args.UserToken is IDisposable d)
+            {
+                try { d.Dispose(); } catch { }
+            }
+
             var owner = _sendPool.Rent(Math.Max(requiredLength, _defaultSendCapacity));
             state = new SendArgsState(owner);
             args.UserToken = state;
@@ -530,6 +617,26 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         state.EnsureCapacity(requiredLength, _sendPool);
         args.SetBuffer(state.Current);
 
+        return args;
+    }
+
+    private SocketAsyncEventArgs DequeueBatchArgs()
+    {
+        if (!_batchArgsQueue.TryDequeue(out var args))
+            args = CreateBatchArgs();
+
+        if (args.UserToken is not BatchSendState)
+        {
+            if (args.UserToken is IDisposable d)
+            {
+                try { d.Dispose(); } catch { }
+            }
+
+            args.UserToken = new BatchSendState();
+        }
+
+        // Ensure it's not holding onto a previous send buffer view
+        args.SetBuffer(Memory<byte>.Empty);
         return args;
     }
 
@@ -554,6 +661,39 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         }
 
         public void Dispose() => Owner.Dispose();
+    }
+
+    private sealed class BatchSendState : IDisposable
+    {
+        public readonly List<ArraySegment<byte>> Segments = new(8);
+        public readonly List<IMemoryOwner<byte>> Owners = new(8);
+
+        public void Clear()
+        {
+            Segments.Clear();
+            Owners.Clear();
+        }
+
+        public void Add(IMemoryOwner<byte> owner, Memory<byte> slice)
+        {
+            // BufferList wants ArraySegment<byte>
+            if (!MemoryMarshal.TryGetArray(slice, out ArraySegment<byte> seg))
+                throw new InvalidOperationException("Expected array-backed Memory from MemoryPool");
+
+            Owners.Add(owner);
+            Segments.Add(seg);
+        }
+
+        public void Dispose()
+        {
+            for (int i = 0; i < Owners.Count; i++)
+            {
+                try { Owners[i].Dispose(); } catch { }
+            }
+
+            Owners.Clear();
+            Segments.Clear();
+        }
     }
 
     #endregion

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace Chaos.Packets;
@@ -103,6 +104,15 @@ public ref struct Packet
         }
 
         return new string(chars);
+    }
+
+    public IMemoryOwner<byte> RentWireBuffer(out Memory<byte> slice)
+    {
+        var len = GetWireLength();
+        var owner = MemoryPool<byte>.Shared.Rent(len);
+        slice = owner.Memory.Slice(0, len);
+        WriteTo(slice.Span);
+        return owner;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
