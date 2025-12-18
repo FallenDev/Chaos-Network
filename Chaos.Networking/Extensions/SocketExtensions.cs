@@ -15,7 +15,6 @@ internal static class SocketExtensions
         {
             // If SendAsync throws, Completed will not fire. Ensure resources return to pool.
             completedEvent(socket, args);
-            throw;
         }
     }
 
@@ -33,5 +32,23 @@ internal static class SocketExtensions
 
         // Enable TCP keep-alive to detect stale connections
         tcpSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+
+        // Tune keep-alive settings (Windows)
+        try
+        {
+            // SIO_KEEPALIVE_VALS = 0x98000004
+            const int SioKeepAliveVals = unchecked((int)0x98000004);
+
+            var inOptionValues = new byte[12];
+            // onOff (1 = true)
+            BitConverter.GetBytes((uint)1).CopyTo(inOptionValues, 0);
+            // Time (ms) before first probe
+            BitConverter.GetBytes((uint)30_000).CopyTo(inOptionValues, 4);
+            // Interval (ms) between probes
+            BitConverter.GetBytes((uint)10_000).CopyTo(inOptionValues, 8);
+            // Apply keep-alive settings
+            tcpSocket.IOControl(SioKeepAliveVals, inOptionValues, null);
+        }
+        catch { }
     }
 }

@@ -19,11 +19,8 @@ namespace Chaos.Networking.Abstractions;
 ///     Receive path is intentionally single-threaded per client:
 ///      - One async receive loop per connection (no SAEA callback reentrancy)
 ///      - Rolling buffer parses as many complete frames as possible per read
-///      - Keeps leftover bytes and continues reading into remaining buffer space
-///     Packet processing is decoupled from receiving:
-///      - Receive loop parses frames and enqueues them
-///      - ProcessInboundAsync runs OnPacketAsync sequentially (per-client order preserved)
-///      - Avoids long processing times blocking the receive loop
+///      - Completed frames are copied to pooled buffers and queued
+///      - A dedicated processor drains the queue and invokes packet handlers sequentially
 /// </summary>
 public abstract class SocketTransportBase : ISocketTransport, IDisposable
 {
@@ -44,6 +41,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     public ICrypto Crypto { get; set; }
     public bool LogRawPackets { get; set; }
     public uint Id { get; }
+
     protected ILogger<SocketTransportBase> Logger { get; }
     protected IPacketSerializer PacketSerializer { get; }
 
@@ -56,19 +54,23 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     private Memory<byte> Memory => _memoryOwner.Memory;
     private Span<byte> Buffer => _memoryOwner.Memory.Span;
 
+    // Send pooling
     private readonly MemoryPool<byte> _sendPool = MemoryPool<byte>.Shared;
     private readonly int _defaultSendCapacity;
-    private int _disposed;
 
+    // Inbound processing queue
     private readonly Channel<InboundFrame> _inbound =
     Channel.CreateBounded<InboundFrame>(new BoundedChannelOptions(256)
     {
         SingleWriter = true,
         SingleReader = true,
-        FullMode = BoundedChannelFullMode.Wait
+        // If the channel is full, drop the write (causes disconnect in receive loop)
+        FullMode = BoundedChannelFullMode.DropWrite
     });
 
     private Task? _processTask;
+    private int _disposed;
+    private readonly CancellationTokenSource _cts = new();
 
     private readonly struct InboundFrame
     {
@@ -82,8 +84,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         }
     }
 
-    private readonly CancellationTokenSource _cts = new();
-
     protected SocketTransportBase(
         Socket socket,
         ICrypto crypto,
@@ -93,6 +93,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         Id = SequentialIdGenerator<uint>.Shared.NextId;
         Socket = socket;
         Crypto = crypto;
+
         SocketExtensions.ConfigureTcpSocket(Socket);
 
         _memoryOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
@@ -200,6 +201,8 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     {
         try
         {
+            var writer = _inbound.Writer;
+
             while (!token.IsCancellationRequested && Socket.Connected)
             {
                 // Read into remaining space in rolling buffer
@@ -243,6 +246,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                                   RemoteIp,
                                   sig,
                                   _count);
+
                         CloseTransport();
                         return;
                     }
@@ -266,6 +270,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                                   payloadLength,
                                   frameLength,
                                   _count);
+
                         CloseTransport();
                         return;
                     }
@@ -274,18 +279,29 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     if (_count - offset < frameLength)
                         break;
 
-                    var frameSpan = Buffer.Slice(offset, frameLength);
-
+                    // Complete frame, copy it to pooled memory and enqueue
                     IMemoryOwner<byte> owner = MemoryPool<byte>.Shared.Rent(frameLength);
                     try
                     {
-                        frameSpan.CopyTo(owner.Memory.Span.Slice(0, frameLength));
-                        await _inbound.Writer.WriteAsync(new InboundFrame(owner, frameLength), token)
-                                      .ConfigureAwait(false);
+                        Buffer.Slice(offset, frameLength)
+                              .CopyTo(owner.Memory.Span.Slice(0, frameLength));
+
+                        // Never block here; if queue is full, disconnect
+                        if (!writer.TryWrite(new InboundFrame(owner, frameLength)))
+                        {
+                            try { owner.Dispose(); } catch { }
+
+                            Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                                  .WithProperty(this)
+                                  .LogWarning("Inbound queue overflow for {RemoteIp}. Disconnecting to avoid receive stalls.", RemoteIp);
+
+                            CloseTransport();
+                            return;
+                        }
                     }
                     catch
                     {
-                        // If enqueue fails, we own the rent, so dispose it
+                        // If enqueue/copy fails, dispose owner
                         try { owner.Dispose(); } catch { }
                         throw;
                     }
@@ -312,15 +328,15 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
                           .WithProperty(this)
                           .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
+
                     CloseTransport();
                     return;
                 }
             }
         }
-        catch
-        {
-            CloseTransport();
-        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        catch { CloseTransport(); }
+        finally { try { _inbound.Writer.TryComplete(); } catch { } }
     }
 
     public virtual void Send<T>(T obj) where T : IPacketSerializable
@@ -354,6 +370,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         // write into the reusable per-SAEA buffer
         var state = (SendArgsState)args.UserToken!;
         packet.WriteTo(state.Current.Span);
+
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
@@ -386,6 +403,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         // write into the reusable per-SAEA buffer
         var state = (SendArgsState)args.UserToken!;
         packet.WriteTo(state.Current.Span);
+
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
@@ -564,9 +582,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             Current = Owner.Memory.Slice(0, requiredLength);
         }
 
-        public void Dispose()
-        {
-            Owner.Dispose();
-        }
+        public void Dispose() => Owner.Dispose();
     }
 }
