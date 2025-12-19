@@ -452,23 +452,23 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        var category = GetHandlerCategory(args!);
+        //var category = GetHandlerCategory(args!);
 
-        if (category == HandlerCategory.RealTime)
-        {
-            // Higher priority -> Direct execution
-            await TryExecuteActionWithArgs(client, args, action);
-            return;
-        }
+        //if (category == HandlerCategory.RealTime)
+        //{
+        //    // Higher priority -> Direct execution
+        //    await TryExecuteActionWithArgs(client, args, action);
+        //    return;
+        //}
 
-        // Lower priority -> Sync + contention handling
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
+        //// Lower priority -> Sync + contention handling
+        //await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
-        if (@lock == null)
-        {
-            Logger.LogInformation($"Contention on {action.Method.Name}");
-            return;
-        }
+        //if (@lock == null)
+        //{
+        //    Logger.LogInformation($"Contention on {action.Method.Name}");
+        //    return;
+        //}
 
         await TryExecuteActionWithArgs(client, args, action);
     }
@@ -500,19 +500,19 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, HandlerCategory category, Func<T, ValueTask> action)
     {
-        if (category == HandlerCategory.RealTime)
-        {
-            await ExecuteHandlerCore(client, action);
-            return;
-        }
+        //if (category == HandlerCategory.RealTime)
+        //{
+        //    await ExecuteHandlerCore(client, action);
+        //    return;
+        //}
 
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
+        //await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
-        if (@lock == null)
-        {
-            Logger.LogInformation($"Contention on {action.Method.Name}");
-            return;
-        }
+        //if (@lock == null)
+        //{
+        //    Logger.LogInformation($"Contention on {action.Method.Name}");
+        //    return;
+        //}
 
         await ExecuteHandlerCore(client, action);
     }
