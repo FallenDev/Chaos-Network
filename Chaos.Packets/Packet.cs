@@ -106,15 +106,6 @@ public ref struct Packet
         return new string(chars);
     }
 
-    public IMemoryOwner<byte> RentWireBuffer(out Memory<byte> slice)
-    {
-        var len = GetWireLength();
-        var owner = MemoryPool<byte>.Shared.Rent(len);
-        slice = owner.Memory.Slice(0, len);
-        WriteTo(slice.Span);
-        return owner;
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private readonly int GetResultLength() => Buffer.Length + (IsEncrypted ? 5 : 4) - 3;
 

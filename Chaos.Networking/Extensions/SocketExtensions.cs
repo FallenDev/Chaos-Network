@@ -4,6 +4,21 @@ namespace Chaos.Extensions.Networking;
 
 internal static class SocketExtensions
 {
+    internal static void ReceiveAndForget(this Socket socket, SocketAsyncEventArgs args, EventHandler<SocketAsyncEventArgs> completedEvent)
+    {
+        try
+        {
+            var completedSynchronously = !socket.ReceiveAsync(args);
+            if (completedSynchronously)
+                completedEvent(socket, args);
+        }
+        catch
+        {
+            // If ReceiveAsync throws, Completed will not fire.
+            completedEvent(socket, args);
+        }
+    }
+
     internal static void SendAndForget(this Socket socket, SocketAsyncEventArgs args, EventHandler<SocketAsyncEventArgs> completedEvent)
     {
         try
