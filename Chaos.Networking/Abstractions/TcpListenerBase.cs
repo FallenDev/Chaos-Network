@@ -385,8 +385,10 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         { typeof(ExchangeInteractionArgs), HandlerCategory.RealTime }, // Player Trading
         { typeof(ExitRequestArgs), HandlerCategory.RealTime }, // Game Exit
         { typeof(GoldDropArgs), HandlerCategory.RealTime }, // Gold Drop on Ground
+        { typeof(GoldDroppedOnCreatureArgs), HandlerCategory.RealTime }, // Gold Drop on NPC
         { typeof(HeartBeatArgs), HandlerCategory.RealTime }, // Ping/Pong
         { typeof(ItemDropArgs), HandlerCategory.RealTime }, // Item Drop on Ground
+        { typeof(ItemDroppedOnCreatureArgs), HandlerCategory.Standard }, // Item Drop on NPC
         { typeof(ItemUseArgs), HandlerCategory.RealTime }, // Item Use
         { typeof(LoginArgs), HandlerCategory.RealTime }, // User Login
         { typeof(MapDataRequestArgs), HandlerCategory.RealTime }, // Map Data Request
@@ -414,10 +416,8 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         { typeof(DisplayEntityRequestArgs), HandlerCategory.Standard }, // Client Entity ID Request
         { typeof(EditableProfileArgs), HandlerCategory.Standard }, // Profile Editing
         { typeof(EmoteArgs), HandlerCategory.Standard }, // Emote Animation
-        { typeof(GoldDroppedOnCreatureArgs), HandlerCategory.Standard }, // Gold Drop on NPC
         { typeof(HomepageRequestArgs), HandlerCategory.Standard }, // Homepage Request
         { typeof(IgnoreArgs), HandlerCategory.Standard }, // Player Ignore List
-        { typeof(ItemDroppedOnCreatureArgs), HandlerCategory.Standard }, // Item Drop on NPC
         { typeof(MenuInteractionArgs), HandlerCategory.Standard }, // NPC Menu Interaction
         { typeof(MetaDataRequestArgs), HandlerCategory.Standard }, // Metafile Data Request
         { typeof(OptionToggleArgs), HandlerCategory.Standard }, // Player Settings Toggle
@@ -452,23 +452,23 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        //var category = GetHandlerCategory(args!);
+        var category = GetHandlerCategory(args!);
 
-        //if (category == HandlerCategory.RealTime)
-        //{
-        //    // Higher priority -> Direct execution
-        //    await TryExecuteActionWithArgs(client, args, action);
-        //    return;
-        //}
+        if (category == HandlerCategory.RealTime)
+        {
+            // Higher priority -> Direct execution
+            await TryExecuteActionWithArgs(client, args, action);
+            return;
+        }
 
-        //// Lower priority -> Sync + contention handling
-        //await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
+        // Lower priority -> Sync + contention handling
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(500));
 
-        //if (@lock == null)
-        //{
-        //    Logger.LogInformation($"Contention on {action.Method.Name}");
-        //    return;
-        //}
+        if (@lock == null)
+        {
+            Logger.LogInformation($"{(Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None} lagging - Dropped {action.Method.Name}");
+            return;
+        }
 
         await TryExecuteActionWithArgs(client, args, action);
     }
@@ -500,19 +500,19 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, HandlerCategory category, Func<T, ValueTask> action)
     {
-        //if (category == HandlerCategory.RealTime)
-        //{
-        //    await ExecuteHandlerCore(client, action);
-        //    return;
-        //}
+        if (category == HandlerCategory.RealTime)
+        {
+            await ExecuteHandlerCore(client, action);
+            return;
+        }
 
-        //await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(500));
 
-        //if (@lock == null)
-        //{
-        //    Logger.LogInformation($"Contention on {action.Method.Name}");
-        //    return;
-        //}
+        if (@lock == null)
+        {
+            Logger.LogInformation($"{(Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None} lagging - Dropped {action.Method.Name}");
+            return;
+        }
 
         await ExecuteHandlerCore(client, action);
     }
