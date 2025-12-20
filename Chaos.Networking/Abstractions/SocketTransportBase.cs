@@ -116,6 +116,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         try
         {
+            var poisonedState = false;
             var bytesRead = e.BytesTransferred;
 
             if (bytesRead == 0)
@@ -137,7 +138,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             var offset = 0;
 
             // Process as many complete packets as possible
-            while (true)
+            while (Count > 3)
             {
                 // Need at least header length
                 if (Count - offset < 5)
@@ -202,32 +203,29 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                                   hex,
                                   ascii);
                     }
-                    catch
-                    {
-                        // If logging the packet fails, swallow to avoid bringing down the server.
-                    }
+                    catch { }
 
-                    // Reset to avoid poisoned state
-                    Count = 0;
-                    break;
+                    poisonedState = true;
                 }
 
+                Count -= frameLength;
                 offset += frameLength;
+            }
 
-                if (offset >= Count)
-                    break;
+            if (poisonedState)
+            {
+                Count = 0;
+                Buffer.Clear();
             }
 
             // Shift leftover bytes to beginning of buffer
-            if (offset > 0)
+            if (Count > 0)
             {
-                Count -= offset;
-                if (Count > 0)
-                    Buffer.Slice(offset, Count).CopyTo(Buffer);
+                Buffer.Slice(offset, Count).CopyTo(Buffer);
             }
 
             // Re-arm receive
-            e.SetBuffer(Memory.Slice(Count));
+            e.SetBuffer(Memory[Count..]);
             Socket.ReceiveAndForget(e, ReceiveEventHandler);
         }
         catch
