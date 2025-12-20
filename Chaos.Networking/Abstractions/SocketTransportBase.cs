@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -25,6 +26,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     private int Count;
     private int _disconnecting;
     private int _disposed;
+    private int _receiveStarted;
 
     private const int ReceiveBufferSize = 64 * 1024;
     public virtual int MaxPacketLength { get; } = 8 * 1024;
@@ -100,6 +102,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     public virtual void StartReceiveLoop()
     {
         if (!Socket.Connected) return;
+        if (Interlocked.Exchange(ref _receiveStarted, 1) == 1) return;
 
         Connected = true;
 
@@ -135,6 +138,17 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
             // Total bytes accumulated in the rolling buffer
             Count += bytesRead;
+
+            if (Count >= ReceiveBufferSize)
+            {
+                Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                      .WithProperty(this)
+                      .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
+
+                CloseTransport();
+                return;
+            }
+
             var offset = 0;
 
             // Process as many complete packets as possible
@@ -180,7 +194,21 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
                 try
                 {
+                    var op = frame[3];
+
+                    long start = Stopwatch.GetTimestamp();
                     await OnPacketAsync(frame).ConfigureAwait(false);
+                    long end = Stopwatch.GetTimestamp();
+
+                    double ms = (end - start) * 1000.0 / Stopwatch.Frequency;
+
+                    // Log only if it actually took time
+                    if (ms >= 2.0) // tune threshold
+                    {
+                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet, Topics.Actions.Processing)
+                              .WithProperty(this)
+                              .LogWarning("Slow packet handler Op={Op} Len={Len} TookMs={Ms:F2} RemoteIp={RemoteIp}", op, frameLength, ms, RemoteIp);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -213,13 +241,10 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             }
 
             if (poisonedState)
-            {
                 Count = 0;
-                Buffer.Clear();
-            }
 
             // Shift leftover bytes to beginning of buffer
-            if (Count > 0)
+            if (offset > 0 && Count > 0)
             {
                 Buffer.Slice(offset, Count).CopyTo(Buffer);
             }
