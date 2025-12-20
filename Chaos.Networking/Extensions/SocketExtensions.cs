@@ -8,14 +8,22 @@ internal static class SocketExtensions
     {
         try
         {
-            var completedSynchronously = !socket.ReceiveAsync(args);
-            if (completedSynchronously)
-                completedEvent(socket, args);
+            if (!socket.ReceiveAsync(args))
+            {
+                ThreadPool.QueueUserWorkItem(static s =>
+                {
+                    var (sock, a, cb) = ((Socket sock, SocketAsyncEventArgs a, EventHandler<SocketAsyncEventArgs> cb))s!;
+                    cb(sock, a);
+                }, (socket, args, completedEvent));
+            }
         }
         catch
         {
-            // If ReceiveAsync throws, Completed will not fire.
-            completedEvent(socket, args);
+            ThreadPool.QueueUserWorkItem(static s =>
+            {
+                var (sock, a, cb) = ((Socket sock, SocketAsyncEventArgs a, EventHandler<SocketAsyncEventArgs> cb))s!;
+                cb(sock, a);
+            }, (socket, args, completedEvent));
         }
     }
 
@@ -24,12 +32,21 @@ internal static class SocketExtensions
         try
         {
             if (!socket.SendAsync(args))
-                completedEvent(socket, args);
+            {
+                ThreadPool.QueueUserWorkItem(static s =>
+                {
+                    var (sock, a, cb) = ((Socket sock, SocketAsyncEventArgs a, EventHandler<SocketAsyncEventArgs> cb))s!;
+                    cb(sock, a);
+                }, (socket, args, completedEvent));
+            }
         }
         catch
         {
-            // If SendAsync throws, Completed will not fire. Ensure resources return to pool.
-            completedEvent(socket, args);
+            ThreadPool.QueueUserWorkItem(static s =>
+            {
+                var (sock, a, cb) = ((Socket sock, SocketAsyncEventArgs a, EventHandler<SocketAsyncEventArgs> cb))s!;
+                cb(sock, a);
+            }, (socket, args, completedEvent));
         }
     }
 

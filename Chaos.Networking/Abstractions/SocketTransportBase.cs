@@ -1,8 +1,10 @@
 using System.Buffers;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 using Chaos.Common.Identity;
+using Chaos.Common.Synchronization;
 using Chaos.Cryptography.Abstractions;
 using Chaos.Extensions.Networking;
 using Chaos.NLog.Logging.Definitions;
@@ -15,45 +17,51 @@ using Microsoft.Extensions.Logging;
 namespace Chaos.Networking.Abstractions;
 
 /// <summary>
-///     Receive path is intentionally single-threaded per client:
-///      - One async receive loop per connection (no SAEA callback reentrancy)
-///      - Rolling buffer parses as many complete frames as possible per read
-///      - Keeps leftover bytes and continues reading into remaining buffer space
-///      
-///     This minimizes scheduling overhead and removes lock/semaphore contention
-///     from the packet processing hot path.
+///     Provides the ability to send and receive packets over a socket
 /// </summary>
 public abstract class SocketTransportBase : ISocketTransport, IDisposable
 {
-    private readonly ConcurrentQueue<SocketAsyncEventArgs> _socketArgsQueue;
+    private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
+    private int Count;
+    private int _disconnecting;
+    private int _disposed;
 
     private const int ReceiveBufferSize = 64 * 1024;
     public virtual int MaxPacketLength { get; } = 8 * 1024;
+    private int Sequence;
 
-    private int _count;
-    private int _sequence;
-    private int _disconnecting;
-    private int _receiveStarted;
-    private int _disposed;
-
+    /// <inheritdoc />
     public bool Connected { get; set; }
+
+    /// <inheritdoc />
     public ICrypto Crypto { get; set; }
+
+    /// <summary>Whether or not to log raw packet data to Trace</summary>
     public bool LogRawPackets { get; set; }
+
+    /// <inheritdoc />
     public uint Id { get; }
 
+    /// <summary>The logger for logging client-related events</summary>
     protected ILogger<SocketTransportBase> Logger { get; }
+
+    private MemoryHandle MemoryHandle { get; }
+    private IMemoryOwner<byte> MemoryOwner { get; }
+
+    /// <summary>The packet serializer for serializing and deserializing packets</summary>
     protected IPacketSerializer PacketSerializer { get; }
 
+    /// <inheritdoc />
+    public FifoSemaphoreSlim ReceiveSync { get; }
+
+    /// <inheritdoc />
     public IPAddress RemoteIp { get; }
+
+    /// <inheritdoc />
     public Socket Socket { get; }
 
-    private readonly IMemoryOwner<byte> _recvOwner;
-    private readonly MemoryHandle _recvHandle;
-    private Memory<byte> RecvMemory => _recvOwner.Memory;
-    private Span<byte> RecvBuffer => _recvOwner.Memory.Span;
-
-    private readonly MemoryPool<byte> _sendPool = MemoryPool<byte>.Shared;
-    private readonly CancellationTokenSource _cts = new();
+    private Span<byte> Buffer => Memory.Span;
+    private Memory<byte> Memory => MemoryOwner.Memory;
 
     protected SocketTransportBase(
         Socket socket,
@@ -64,194 +72,179 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         Id = SequentialIdGenerator<uint>.Shared.NextId;
         Socket = socket;
         Crypto = crypto;
-        PacketSerializer = packetSerializer;
-        Logger = logger;
+
         SocketExtensions.ConfigureTcpSocket(Socket);
 
+        // Rent a receive buffer bigger than max packet to allow multiple packets per read
+        MemoryOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
+        MemoryHandle = Memory.Pin();
+
+        Logger = logger;
+        PacketSerializer = packetSerializer;
         RemoteIp = (Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None;
 
-        // Memory Setup
-        _recvOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
-        _recvHandle = _recvOwner.Memory.Pin();
+        ReceiveSync = new FifoSemaphoreSlim(1, 1, $"{GetType().Name} {RemoteIp} (Socket)");
 
-
-        var initialArgs = Enumerable.Range(0, 10).Select(_ => CreateSendArgs());
-        _socketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
+        var initialArgs = Enumerable.Range(0, 10).Select(_ => CreateArgs());
+        SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
 
         Connected = false;
     }
 
     public event EventHandler? OnDisconnected;
-
-    public virtual void SetSequence(byte newSequence) => _sequence = newSequence;
-
-    /// <summary>
-    ///     Handle a fully framed packet:
-    ///     [signature][len_hi][len_lo][opcode][sequence][payload...]
-    /// </summary>
+    public virtual void SetSequence(byte newSequence) => Sequence = newSequence;
     protected abstract ValueTask OnPacketAsync(Span<byte> span);
 
     #region Networking
 
-    /// <summary>
-    ///     Starts the receive loop once per client
-    /// </summary>
     public virtual void StartReceiveLoop()
     {
         if (!Socket.Connected) return;
-        if (Interlocked.Exchange(ref _receiveStarted, 1) == 1) return;
 
         Connected = true;
 
-        _ = StartReceiveAsync(_cts.Token);
+        var args = new SocketAsyncEventArgs();
+        args.SetBuffer(Memory);
+        args.Completed += ReceiveEventHandler;
+
+        Socket.ReceiveAndForget(args, ReceiveEventHandler);
     }
 
-    private async Task StartReceiveAsync(CancellationToken token)
+    private async void ReceiveEventHandler(object? sender, SocketAsyncEventArgs e)
     {
+        await ReceiveSync.WaitAsync().ConfigureAwait(false);
+
         try
         {
-            while (!token.IsCancellationRequested && Socket.Connected)
+            var bytesRead = e.BytesTransferred;
+
+            if (bytesRead == 0)
             {
-                // Read into remaining space in rolling buffer
-                var writeMem = RecvMemory.Slice(_count);
+                // Graceful remote shutdown
+                CloseTransport();
+                return;
+            }
 
-                int bytesRead;
-                try
-                {
-                    bytesRead = await Socket.ReceiveAsync(writeMem, SocketFlags.None, token)
-                                            .ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
-                catch (ObjectDisposedException) { break; }
-                catch (SocketException) { CloseTransport(); return; }
+            if (e.SocketError != SocketError.Success)
+            {
+                // Transport-level failure
+                CloseTransport();
+                return;
+            }
 
-                // Remote closed connection
-                if (bytesRead == 0)
-                {
-                    CloseTransport();
-                    return;
-                }
+            // Total bytes accumulated in the rolling buffer
+            Count += bytesRead;
+            var offset = 0;
 
-                _count += bytesRead;
+            // Process as many complete packets as possible
+            while (true)
+            {
+                // Need at least header length
+                if (Count - offset < 5)
+                    break;
 
-                int offset = 0;
-
-                while (true)
-                {
-                    // Need at least 5 bytes: sig + len_hi + len_lo + opcode + seq
-                    if (_count - offset < 5)
-                        break;
-
-                    // Signature check
-                    byte sig = RecvBuffer[offset];
-                    if (sig != 0xAA)
-                    {
-                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                              .WithProperty(this)
-                              .LogWarning(
-                                  "Disconnecting client {RemoteIp} due to bad signature: {Sig} (Buffered={Buffered})",
-                                  RemoteIp,
-                                  sig,
-                                  _count);
-                        CloseTransport();
-                        return;
-                    }
-
-                    // Extract payload length
-                    int lengthHi = RecvBuffer[offset + 1];
-                    int lengthLo = RecvBuffer[offset + 2];
-                    int payloadLength = (lengthHi << 8) | lengthLo;
-
-                    // Full frame length = payload + 3 (sig+len_hi+len_lo)
-                    int frameLength = payloadLength + 3;
-
-                    // Hard safety rails
-                    if (frameLength <= 0 || frameLength > MaxPacketLength)
-                    {
-                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                              .WithProperty(this)
-                              .LogWarning(
-                                  "Disconnecting client {RemoteIp} due to invalid frame length. Payload={Payload}, Frame={Frame}, Buffered={Buffered}",
-                                  RemoteIp,
-                                  payloadLength,
-                                  frameLength,
-                                  _count);
-                        CloseTransport();
-                        return;
-                    }
-
-                    // Not enough bytes yet for a full frame
-                    if (_count - offset < frameLength)
-                        break;
-
-                    var frame = RecvBuffer.Slice(offset, frameLength);
-
-                    try
-                    {
-                        // ToDo: HOT PATH
-                        var vt = OnPacketAsync(frame);
-                        if (!vt.IsCompletedSuccessfully)
-                            await vt.ConfigureAwait(false);
-                        else
-                            vt.GetAwaiter().GetResult();
-                    }
-                    catch (Exception ex)
-                    {
-                        // Heavy logging only when explicitly enabled; otherwise keep the hot path lean.
-                        if (LogRawPackets)
-                        {
-                            try
-                            {
-                                Logger.WithTopics(
-                                          Topics.Entities.Client,
-                                          Topics.Entities.Packet,
-                                          Topics.Actions.Processing)
-                                      .WithProperty(this)
-                                      .LogError(ex, "Error handling packet (Length={Length})", frameLength);
-                            }
-                            catch { }
-                        }
-
-                        // Reset buffer to avoid poisoned state / partial misalignment
-                        _count = 0;
-                        break;
-                    }
-
-                    offset += frameLength;
-
-                    if (offset >= _count)
-                        break;
-                }
-
-                // Shift leftover bytes to front
-                if (offset > 0)
-                {
-                    _count -= offset;
-
-                    if (_count > 0)
-                        RecvBuffer.Slice(offset, _count).CopyTo(RecvBuffer);
-                }
-
-                // If the rolling buffer ever fills without producing a valid frame, drop
-                // This is a "never should happen" rail if a client goes rogue
-                if (_count >= ReceiveBufferSize)
+                // Signature check
+                byte sig = Buffer[offset];
+                if (sig != 0xAA)
                 {
                     Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
                           .WithProperty(this)
-                          .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})", RemoteIp, ReceiveBufferSize);
+                          .LogWarning("Disconnecting client {RemoteIp} due to bad signature: {Sig} (Count={Count})", RemoteIp, sig, Count);
                     CloseTransport();
                     return;
                 }
+
+                // Extract length
+                int lengthHi = Buffer[offset + 1];
+                int lengthLo = Buffer[offset + 2];
+                int payloadLength = (lengthHi << 8) | lengthLo;
+                // Full frame length = payload + 3 header bytes
+                int frameLength = payloadLength + 3;
+
+                if (frameLength <= 0 || frameLength > MaxPacketLength)
+                {
+                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                          .WithProperty(this)
+                          .LogWarning("Disconnecting client {RemoteIp} due to invalid frame length. Payload={PayloadLength}, Frame={FrameLength}, Count={Count}", RemoteIp, payloadLength, frameLength, Count);
+                    CloseTransport();
+                    return;
+                }
+
+                // Wait if not enough bytes for full frame
+                if (Count - offset < frameLength)
+                    break;
+
+                // We have a complete packet: slice it safely
+                var frame = Buffer.Slice(offset, frameLength);
+
+                try
+                {
+                    await OnPacketAsync(frame).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    try
+                    {
+                        var slice = Buffer.Slice(offset, frameLength);
+                        var hex = BitConverter.ToString(slice.ToArray()).Replace("-", " ");
+                        var ascii = Encoding.ASCII.GetString(slice);
+
+                        Logger.WithTopics(
+                                  Topics.Entities.Client,
+                                  Topics.Entities.Packet,
+                                  Topics.Actions.Processing)
+                              .WithProperty(this)
+                              .LogError(
+                                  ex,
+                                  "Error handling packet (Offset={Offset}, Length={Length})\nHex: {Hex}\nASCII: {Ascii}",
+                                  offset,
+                                  frameLength,
+                                  hex,
+                                  ascii);
+                    }
+                    catch
+                    {
+                        // If logging the packet fails, swallow to avoid bringing down the server.
+                    }
+
+                    // Reset to avoid poisoned state
+                    Count = 0;
+                    break;
+                }
+
+                offset += frameLength;
+
+                if (offset >= Count)
+                    break;
             }
+
+            // Shift leftover bytes to beginning of buffer
+            if (offset > 0)
+            {
+                Count -= offset;
+                if (Count > 0)
+                    Buffer.Slice(offset, Count).CopyTo(Buffer);
+            }
+
+            // Re-arm receive
+            e.SetBuffer(Memory.Slice(Count));
+            Socket.ReceiveAndForget(e, ReceiveEventHandler);
         }
         catch
         {
             CloseTransport();
         }
+        finally
+        {
+            ReceiveSync.Release();
+        }
     }
 
+    /// <inheritdoc />
     public virtual void Send<T>(T obj) where T : IPacketSerializable
     {
+        if (!Connected || !Socket.Connected) return;
+
         var packet = PacketSerializer.Serialize(obj);
         Send(ref packet);
     }
@@ -261,7 +254,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         if (!Connected || !Socket.Connected) return;
 
         if (LogRawPackets)
-        {
             Logger.WithTopics(
                       Topics.Qualifiers.Raw,
                       Topics.Entities.Client,
@@ -269,22 +261,19 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                       Topics.Actions.Send)
                   .WithProperty(this)
                   .LogTrace("[Snd] {Packet}", packet.ToString());
-        }
 
         packet.IsEncrypted = IsEncrypted(packet.OpCode);
 
         if (packet.IsEncrypted)
         {
-            packet.Sequence = (byte)(Interlocked.Increment(ref _sequence) - 1);
+            packet.Sequence = (byte)(Interlocked.Increment(ref Sequence) - 1);
             Encrypt(ref packet);
         }
 
-        var wireLength = packet.GetWireLength();
-        var args = DequeueSendArgs(wireLength);
+        // [signature][len_hi][len_lo][opcode][sequence][payload]
+        var owner = RentWireBuffer(ref packet, out var memory);
 
-        var state = (SendArgsState)args.UserToken!;
-        packet.WriteTo(state.Current.Span);
-
+        var args = DequeueArgs(memory, owner);
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
@@ -296,8 +285,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         if (Interlocked.Exchange(ref _disconnecting, 1) == 1) return;
 
         Connected = false;
-
-        try { _cts.Cancel(); } catch { }
 
         try { Socket.Shutdown(SocketShutdown.Both); } catch { }
         try { OnDisconnected?.Invoke(this, EventArgs.Empty); } catch { }
@@ -312,26 +299,24 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         GC.SuppressFinalize(this);
 
-        try { _cts.Cancel(); } catch { }
-        try { _cts.Dispose(); } catch { }
+        try { MemoryHandle.Dispose(); } catch { }
+        try { MemoryOwner.Dispose(); } catch { }
 
-        while (_socketArgsQueue.TryDequeue(out var args))
+        // Drain pool to dispose any outstanding rented send buffers
+        while (SocketArgsQueue.TryDequeue(out var e))
         {
             try
             {
-                if (args.UserToken is SendArgsState state)
+                if (e.UserToken is IMemoryOwner<byte> mem)
                 {
-                    args.UserToken = null;
-                    state.Dispose();
+                    e.UserToken = null;
+                    mem.Dispose();
                 }
             }
             catch { }
 
-            try { args.Dispose(); } catch { }
+            try { e.Dispose(); } catch { }
         }
-
-        try { _recvHandle.Dispose(); } catch { }
-        try { _recvOwner.Dispose(); } catch { }
 
         try { Socket.Close(); } catch { }
     }
@@ -340,113 +325,47 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     #endregion
 
-    #region Utility (send pooling)
+    #region Utility
 
+    /// <summary>
+    /// Disposes memory owner if present and recycles SAEA back to the queue
+    /// </summary>
     private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e)
     {
-        var disposed = Volatile.Read(ref _disposed) == 1;
-
-        if (!disposed && e.SocketError != SocketError.Success)
+        if (e.UserToken is IMemoryOwner<byte> mem)
         {
-            try
-            {
-                Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                      .WithProperty(this)
-                      .LogDebug(
-                          "SocketAsyncEventArgs completed with error. Op={Op} Error={Error} Bytes={Bytes}",
-                          e.LastOperation,
-                          e.SocketError,
-                          e.BytesTransferred);
-            }
-            catch { }
-
-            try { CloseTransport(); } catch { }
-            disposed = Volatile.Read(ref _disposed) == 1;
+            e.UserToken = null;
+            mem.Dispose();
         }
 
-        if (disposed)
-        {
-            try
-            {
-                if (e.UserToken is SendArgsState state)
-                {
-                    e.UserToken = null;
-                    state.Dispose();
-                }
-            }
-            catch { }
-
-            try { e.Dispose(); } catch { }
-            return;
-        }
-
-        try
-        {
-            if (e.UserToken is SendArgsState state)
-                e.SetBuffer(state.Owner.Memory.Slice(0, 0));
-            else
-                e.SetBuffer(Memory<byte>.Empty);
-        }
-        catch
-        {
-            try { CloseTransport(); } catch { }
-            return;
-        }
-
-        _socketArgsQueue.Enqueue(e);
+        e.BufferList = null;
+        SocketArgsQueue.Enqueue(e);
     }
 
-    private SocketAsyncEventArgs CreateSendArgs()
+    private SocketAsyncEventArgs CreateArgs()
     {
         var args = new SocketAsyncEventArgs();
         args.Completed += ReuseSocketAsyncEventArgs;
-
-        var owner = _sendPool.Rent(MaxPacketLength);
-        args.UserToken = new SendArgsState(owner);
-
-        args.SetBuffer(owner.Memory.Slice(0, 0));
         return args;
     }
 
-    private SocketAsyncEventArgs DequeueSendArgs(int requiredLength)
+    private SocketAsyncEventArgs DequeueArgs(Memory<byte> buffer, IMemoryOwner<byte> owner)
     {
-        if (!_socketArgsQueue.TryDequeue(out var args))
-            args = CreateSendArgs();
+        if (!SocketArgsQueue.TryDequeue(out var args))
+            args = CreateArgs();
 
-        if (args.UserToken is not SendArgsState state)
-        {
-            var owner = _sendPool.Rent(Math.Max(requiredLength, MaxPacketLength));
-            state = new SendArgsState(owner);
-            args.UserToken = state;
-        }
-
-        state.EnsureCapacity(requiredLength, _sendPool);
-        args.SetBuffer(state.Current);
-
+        args.UserToken = owner;
+        args.SetBuffer(buffer);
         return args;
     }
 
-    private sealed class SendArgsState(IMemoryOwner<byte> owner) : IDisposable
+    private static IMemoryOwner<byte> RentWireBuffer(ref Packet packet, out Memory<byte> memory)
     {
-        public IMemoryOwner<byte> Owner = owner;
-        public int Capacity = owner.Memory.Length;
-        public Memory<byte> Current = default;
-
-        public void EnsureCapacity(int requiredLength, MemoryPool<byte> pool)
-        {
-            if (Capacity >= requiredLength)
-            {
-                Current = Owner.Memory.Slice(0, requiredLength);
-                return;
-            }
-
-            Owner.Dispose();
-            Owner = pool.Rent(requiredLength);
-            Capacity = Owner.Memory.Length;
-            Current = Owner.Memory.Slice(0, requiredLength);
-        }
-
-        public void Dispose() => Owner.Dispose();
+        var len = packet.GetWireLength();
+        var owner = MemoryPool<byte>.Shared.Rent(len);
+        memory = owner.Memory.Slice(0, len);
+        packet.WriteTo(memory.Span);
+        return owner;
     }
 
     #endregion
