@@ -121,7 +121,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         try
         {
             var bytesRead = e.BytesTransferred;
-            var buffer = Buffer;
 
             if (bytesRead == 0)
             {
@@ -160,7 +159,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     break;
 
                 // Signature check
-                byte sig = buffer[offset];
+                byte sig = Buffer[offset];
                 if (sig != 0xAA)
                 {
                     Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
@@ -171,8 +170,8 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 }
 
                 // Extract length
-                int lengthHi = buffer[offset + 1];
-                int lengthLo = buffer[offset + 2];
+                int lengthHi = Buffer[offset + 1];
+                int lengthLo = Buffer[offset + 2];
                 int payloadLength = (lengthHi << 8) | lengthLo;
 
                 // Full frame length = 3 header bytes + payloadLength
@@ -201,7 +200,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     break;
 
                 // We have a complete packet: slice it safely
-                var frame = buffer.Slice(offset, frameLength);
+                var frame = Buffer.Slice(offset, frameLength);
 
                 try
                 {
@@ -228,7 +227,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 {
                     try
                     {
-                        var slice = buffer.Slice(offset, frameLength);
+                        var slice = Buffer.Slice(offset, frameLength);
                         var hex = BitConverter.ToString(slice.ToArray()).Replace("-", " ");
                         var ascii = Encoding.ASCII.GetString(slice);
 
@@ -263,7 +262,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 Count -= offset;
 
                 if (Count > 0)
-                    buffer.Slice(offset, Count).CopyTo(buffer);
+                    Buffer.Slice(offset, Count).CopyTo(Buffer);
             }
 
             // Re-arm receive
