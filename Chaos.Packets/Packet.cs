@@ -9,6 +9,7 @@ namespace Chaos.Packets;
 public ref struct Packet
 {
     private const byte DefaultSignature = 0xAA;
+    private const int HeaderLength = 5;
 
     /// <summary>
     ///     The buffer containing the packet data
@@ -107,12 +108,20 @@ public ref struct Packet
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private readonly int GetResultLength() => Buffer.Length + (IsEncrypted ? 5 : 4) - 3;
+    private readonly int GetResultLength() => Buffer.Length;
 
     /// <summary>
-    ///     Returns the exact number of bytes written on the wire by ToMemory()/ToSpan().
+    ///     Returns the exact number of bytes written on the wire
     /// </summary>
-    public readonly int GetWireLength() => GetResultLength() + 3;
+    public readonly int GetWireLength()
+    {
+        // length field counts bytes AFTER [sig,len_hi,len_lo]
+        // opcode always present (1)
+        // sequence only present when encrypted (1)
+        // plus payload bytes (Buffer.Length)
+        var resultLength = GetResultLength() + (IsEncrypted ? 2 : 1);
+        return resultLength + 3;
+    }
 
     /// <summary>
     ///     Writes the wire-format packet into the provided destination span.
@@ -120,21 +129,32 @@ public ref struct Packet
     /// </summary>
     public readonly void WriteTo(Span<byte> destination)
     {
-        var resultLength = GetResultLength();
+        var resultLength = GetResultLength() + (IsEncrypted ? 2 : 1);
         var wireLength = resultLength + 3;
 
         if ((uint)destination.Length < (uint)wireLength)
             throw new ArgumentException($"Destination too small. Need {wireLength} bytes.", nameof(destination));
 
         destination[0] = Signature;
-        destination[1] = (byte)(resultLength >> 8);
-        destination[2] = (byte)resultLength;
+        destination[1] = (byte)(resultLength / 256);
+        destination[2] = (byte)(resultLength % 256);
         destination[3] = OpCode;
-        destination[4] = Sequence;
 
-        // Copy payload to the tail (same behavior as ToMemory)
+        int payloadStart;
+
+        if (IsEncrypted)
+        {
+            destination[4] = Sequence;
+            payloadStart = 5;
+        }
+        else
+        {
+            payloadStart = 4;
+        }
+
+        // Copy payload to the tail
         if (!Buffer.IsEmpty)
-            Buffer.CopyTo(destination.Slice(wireLength - Buffer.Length, Buffer.Length));
+            Buffer.CopyTo(destination.Slice(payloadStart, GetResultLength()));
     }
 
     /// <summary>

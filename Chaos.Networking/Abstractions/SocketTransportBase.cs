@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -23,6 +22,7 @@ namespace Chaos.Networking.Abstractions;
 public abstract class SocketTransportBase : ISocketTransport, IDisposable
 {
     private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
+    private SocketAsyncEventArgs? _receiveArgs;
     private int Count;
     private int _disconnecting;
     private int _disposed;
@@ -87,7 +87,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         ReceiveSync = new FifoSemaphoreSlim(1, 1, $"{GetType().Name} {RemoteIp} (Socket)");
 
-        var initialArgs = Enumerable.Range(0, 10).Select(_ => CreateArgs());
+        var initialArgs = Enumerable.Range(0, 50).Select(_ => CreateArgs());
         SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
 
         Connected = false;
@@ -105,12 +105,13 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         if (Interlocked.Exchange(ref _receiveStarted, 1) == 1) return;
 
         Connected = true;
+        Count = 0;
 
-        var args = new SocketAsyncEventArgs();
-        args.SetBuffer(Memory);
-        args.Completed += ReceiveEventHandler;
+        _receiveArgs = new SocketAsyncEventArgs();
+        _receiveArgs.SetBuffer(Memory);
+        _receiveArgs.Completed += ReceiveEventHandler;
 
-        Socket.ReceiveAndForget(args, ReceiveEventHandler);
+        Socket.ReceiveAndForget(_receiveArgs, ReceiveEventHandler);
     }
 
     private async void ReceiveEventHandler(object? sender, SocketAsyncEventArgs e)
@@ -119,8 +120,8 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         try
         {
-            var poisonedState = false;
             var bytesRead = e.BytesTransferred;
+            var buffer = Buffer;
 
             if (bytesRead == 0)
             {
@@ -152,14 +153,14 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             var offset = 0;
 
             // Process as many complete packets as possible
-            while (Count > 3)
+            while (true)
             {
                 // Need at least header length
-                if (Count - offset < 5)
+                if ((uint)(Count - offset) < 4u)
                     break;
 
                 // Signature check
-                byte sig = Buffer[offset];
+                byte sig = buffer[offset];
                 if (sig != 0xAA)
                 {
                     Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
@@ -170,11 +171,21 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 }
 
                 // Extract length
-                int lengthHi = Buffer[offset + 1];
-                int lengthLo = Buffer[offset + 2];
+                int lengthHi = buffer[offset + 1];
+                int lengthLo = buffer[offset + 2];
                 int payloadLength = (lengthHi << 8) | lengthLo;
-                // Full frame length = payload + 3 header bytes
+
+                // Full frame length = 3 header bytes + payloadLength
                 int frameLength = payloadLength + 3;
+
+                if (payloadLength < 1)
+                {
+                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                          .WithProperty(this)
+                          .LogWarning("Disconnecting client {RemoteIp} due to invalid payload length. Payload={PayloadLength}, Count={Count}", RemoteIp, payloadLength, Count);
+                    CloseTransport();
+                    return;
+                }
 
                 if (frameLength <= 0 || frameLength > MaxPacketLength)
                 {
@@ -190,31 +201,34 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     break;
 
                 // We have a complete packet: slice it safely
-                var frame = Buffer.Slice(offset, frameLength);
+                var frame = buffer.Slice(offset, frameLength);
 
                 try
                 {
-                    var op = frame[3];
+                    // ToDo: Commented out timing code - used for profiling packet handlers
+                    //var op = frame[3];
 
-                    long start = Stopwatch.GetTimestamp();
-                    await OnPacketAsync(frame).ConfigureAwait(false);
-                    long end = Stopwatch.GetTimestamp();
+                    //long start = Stopwatch.GetTimestamp();
+                    var vt = OnPacketAsync(frame);
+                    if (!vt.IsCompletedSuccessfully)
+                        await vt.ConfigureAwait(false);
+                    //long end = Stopwatch.GetTimestamp();
 
-                    double ms = (end - start) * 1000.0 / Stopwatch.Frequency;
+                    //double ms = (end - start) * 1000.0 / Stopwatch.Frequency;
 
-                    // Log only if it actually took time
-                    if (ms >= 2.0) // tune threshold
-                    {
-                        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet, Topics.Actions.Processing)
-                              .WithProperty(this)
-                              .LogWarning("Slow packet handler Op={Op} Len={Len} TookMs={Ms:F2} RemoteIp={RemoteIp}", op, frameLength, ms, RemoteIp);
-                    }
+                    // Log slow packet handling
+                    //if (ms >= 100.0)
+                    //{
+                    //    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet, Topics.Actions.Processing)
+                    //          .WithProperty(this)
+                    //          .LogWarning("Slow packet handler Op={Op} Len={Len} TookMs={ms:F2} RemoteIp={RemoteIp}", op, frameLength, ms, RemoteIp);
+                    //}
                 }
                 catch (Exception ex)
                 {
                     try
                     {
-                        var slice = Buffer.Slice(offset, frameLength);
+                        var slice = buffer.Slice(offset, frameLength);
                         var hex = BitConverter.ToString(slice.ToArray()).Replace("-", " ");
                         var ascii = Encoding.ASCII.GetString(slice);
 
@@ -233,25 +247,31 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     }
                     catch { }
 
-                    poisonedState = true;
+                    Count = 0;
+                    break;
                 }
 
-                Count -= frameLength;
                 offset += frameLength;
+
+                if (offset >= Count)
+                    break;
             }
 
-            if (poisonedState)
-                Count = 0;
-
             // Shift leftover bytes to beginning of buffer
-            if (offset > 0 && Count > 0)
+            if (offset > 0)
             {
-                Buffer.Slice(offset, Count).CopyTo(Buffer);
+                Count -= offset;
+
+                if (Count > 0)
+                    buffer.Slice(offset, Count).CopyTo(buffer);
             }
 
             // Re-arm receive
-            e.SetBuffer(Memory[Count..]);
-            Socket.ReceiveAndForget(e, ReceiveEventHandler);
+            if (Connected && Socket.Connected)
+            {
+                e.SetBuffer(Memory[Count..]);
+                Socket.ReceiveAndForget(e, ReceiveEventHandler);
+            }
         }
         catch
         {
@@ -324,6 +344,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         try { MemoryHandle.Dispose(); } catch { }
         try { MemoryOwner.Dispose(); } catch { }
+        try { _receiveArgs?.Dispose(); } catch { }
 
         // Drain pool to dispose any outstanding rented send buffers
         while (SocketArgsQueue.TryDequeue(out var e))
@@ -359,6 +380,12 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         {
             e.UserToken = null;
             mem.Dispose();
+        }
+
+        if (e.SocketError != SocketError.Success)
+        {
+            try { CloseTransport(); } catch { }
+            return;
         }
 
         e.BufferList = null;
