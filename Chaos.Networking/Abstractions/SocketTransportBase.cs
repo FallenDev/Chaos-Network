@@ -64,6 +64,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     private Span<byte> Buffer => Memory.Span;
     private Memory<byte> Memory => MemoryOwner.Memory;
+    private static readonly ArrayPool<byte> SendBufferPool = ArrayPool<byte>.Shared;
 
     protected SocketTransportBase(
         Socket socket,
@@ -139,7 +140,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             // Total bytes accumulated in the rolling buffer
             Count += bytesRead;
 
-            if (Count >= ReceiveBufferSize)
+            if (Count > ReceiveBufferSize)
             {
                 Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
                       .WithProperty(this)
@@ -313,9 +314,8 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         }
 
         // [signature][len_hi][len_lo][opcode][sequence][payload]
-        var owner = RentWireBuffer(ref packet, out var memory);
-
-        var args = DequeueArgs(memory, owner);
+        var buffer = RentWireBuffer(ref packet, out var length);
+        var args = DequeueArgs(buffer, length);
         Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
     }
 
@@ -350,10 +350,10 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         {
             try
             {
-                if (e.UserToken is IMemoryOwner<byte> mem)
+                if (e.UserToken is byte[] buffer)
                 {
                     e.UserToken = null;
-                    mem.Dispose();
+                    SendBufferPool.Return(buffer);
                 }
             }
             catch { }
@@ -375,10 +375,10 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     /// </summary>
     private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e)
     {
-        if (e.UserToken is IMemoryOwner<byte> mem)
+        if (e.UserToken is byte[] buffer)
         {
             e.UserToken = null;
-            mem.Dispose();
+            SendBufferPool.Return(buffer);
         }
 
         if (e.SocketError != SocketError.Success)
@@ -398,23 +398,22 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         return args;
     }
 
-    private SocketAsyncEventArgs DequeueArgs(Memory<byte> buffer, IMemoryOwner<byte> owner)
+    private SocketAsyncEventArgs DequeueArgs(byte[] buffer, int length)
     {
         if (!SocketArgsQueue.TryDequeue(out var args))
             args = CreateArgs();
 
-        args.UserToken = owner;
-        args.SetBuffer(buffer);
+        args.UserToken = buffer;
+        args.SetBuffer(buffer, 0, length);
         return args;
     }
 
-    private static IMemoryOwner<byte> RentWireBuffer(ref Packet packet, out Memory<byte> memory)
+    private static byte[] RentWireBuffer(ref Packet packet, out int length)
     {
-        var len = packet.GetWireLength();
-        var owner = MemoryPool<byte>.Shared.Rent(len);
-        memory = owner.Memory.Slice(0, len);
-        packet.WriteTo(memory.Span);
-        return owner;
+        length = packet.GetWireLength();
+        var buffer = SendBufferPool.Rent(length);
+        packet.WriteTo(buffer.AsSpan(0, length));
+        return buffer;
     }
 
     #endregion

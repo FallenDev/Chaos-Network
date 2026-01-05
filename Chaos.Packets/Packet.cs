@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace Chaos.Packets;
@@ -9,10 +8,9 @@ namespace Chaos.Packets;
 public ref struct Packet
 {
     private const byte DefaultSignature = 0xAA;
-    private const int HeaderLength = 5;
 
     /// <summary>
-    ///     The buffer containing the packet data
+    ///     The buffer containing the packet data (no header)
     /// </summary>
     public Span<byte> Buffer;
 
@@ -43,13 +41,7 @@ public ref struct Packet
     ///     The buffer containing the packet data.
     /// </param>
     /// <param name="isEncrypted">
-    ///     <c>
-    ///         true
-    ///     </c>
-    ///     if the packet is encrypted; otherwise,
-    ///     <c>
-    ///         false
-    ///     </c>
+    ///     <c>true</c> if the packet is encrypted; otherwise, <c>false</c>.
     /// </param>
     public Packet(ref Span<byte> span, bool isEncrypted)
     {
@@ -108,19 +100,17 @@ public ref struct Packet
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private readonly int GetResultLength() => Buffer.Length;
+    private readonly int GetBodyLength() => Buffer.Length + (IsEncrypted ? 2 : 1);
 
     /// <summary>
     ///     Returns the exact number of bytes written on the wire
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly int GetWireLength()
     {
-        // length field counts bytes AFTER [sig,len_hi,len_lo]
-        // opcode always present (1)
-        // sequence only present when encrypted (1)
-        // plus payload bytes (Buffer.Length)
-        var resultLength = GetResultLength() + (IsEncrypted ? 2 : 1);
-        return resultLength + 3;
+        // [sig][len_hi][len_lo] + "result length"
+        // where "result length" is everything after those 3 bytes.
+        return GetBodyLength() + 3;
     }
 
     /// <summary>
@@ -129,15 +119,17 @@ public ref struct Packet
     /// </summary>
     public readonly void WriteTo(Span<byte> destination)
     {
-        var resultLength = GetResultLength() + (IsEncrypted ? 2 : 1);
+        var payloadLength = Buffer.Length;
+        var resultLength = GetBodyLength();
         var wireLength = resultLength + 3;
 
         if ((uint)destination.Length < (uint)wireLength)
-            throw new ArgumentException($"Destination too small. Need {wireLength} bytes.", nameof(destination));
+            throw new ArgumentException($"Destination too small. Need {wireLength} bytes, got {destination.Length}.", nameof(destination));
 
         destination[0] = Signature;
-        destination[1] = (byte)(resultLength / 256);
-        destination[2] = (byte)(resultLength % 256);
+        // 16-bit length is big-endian
+        destination[1] = (byte)(resultLength >> 8);
+        destination[2] = (byte)resultLength;
         destination[3] = OpCode;
 
         int payloadStart;
@@ -154,7 +146,7 @@ public ref struct Packet
 
         // Copy payload to the tail
         if (!Buffer.IsEmpty)
-            Buffer.CopyTo(destination.Slice(payloadStart, GetResultLength()));
+            Buffer.CopyTo(destination.Slice(payloadStart, payloadLength));
     }
 
     /// <summary>

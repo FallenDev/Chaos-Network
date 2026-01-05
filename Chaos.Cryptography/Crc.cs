@@ -1,12 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 
 namespace Chaos.Cryptography;
 
 [ExcludeFromCodeCoverage]
 public static class Crc
 {
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ushort Generate16(ReadOnlySpan<byte> data)
     {
         ushort crc = 0;
@@ -22,7 +20,6 @@ public static class Crc
         return crc;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint Generate32(ReadOnlySpan<byte> data)
     {
         uint checkSum = uint.MaxValue;
