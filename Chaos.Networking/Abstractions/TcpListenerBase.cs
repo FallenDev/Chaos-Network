@@ -388,7 +388,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         { typeof(GoldDroppedOnCreatureArgs), HandlerCategory.RealTime }, // Gold Drop on NPC
         { typeof(HeartBeatArgs), HandlerCategory.RealTime }, // Ping/Pong
         { typeof(ItemDropArgs), HandlerCategory.RealTime }, // Item Drop on Ground
-        { typeof(ItemDroppedOnCreatureArgs), HandlerCategory.Standard }, // Item Drop on NPC
+        { typeof(ItemDroppedOnCreatureArgs), HandlerCategory.RealTime }, // Item Drop on NPC
         { typeof(ItemUseArgs), HandlerCategory.RealTime }, // Item Use
         { typeof(LoginArgs), HandlerCategory.RealTime }, // User Login
         { typeof(MapDataRequestArgs), HandlerCategory.RealTime }, // Map Data Request
