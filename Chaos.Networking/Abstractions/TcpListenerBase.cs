@@ -395,6 +395,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         { typeof(NoticeRequestArgs), HandlerCategory.RealTime }, // Intro Notice Board
         { typeof(PickupArgs), HandlerCategory.RealTime }, // Item/Gold Pickup from Ground
         { typeof(RaiseStatArgs), HandlerCategory.RealTime }, // Player Stat Raise
+        { typeof(RefreshRequestArgs), HandlerCategory.RealTime }, // Map Refresh Request
         { typeof(SequenceChangeArgs), HandlerCategory.RealTime }, // Packet Sequence Change
         { typeof(ServerTableRequestArgs), HandlerCategory.RealTime }, // Server List
         { typeof(SkillUseArgs), HandlerCategory.RealTime }, // Skill Use
@@ -423,7 +424,6 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         { typeof(OptionToggleArgs), HandlerCategory.Standard }, // Player Settings Toggle
         { typeof(PasswordChangeArgs), HandlerCategory.Standard }, // Player Password Change
         { typeof(PublicMessageArgs), HandlerCategory.Standard }, // Public Player Chat
-        { typeof(RefreshRequestArgs), HandlerCategory.Standard }, // Map Refresh Request
         { typeof(SelfProfileRequestArgs), HandlerCategory.Standard }, // Player Self-Profile Request
         { typeof(SetNotepadArgs), HandlerCategory.Standard }, // Player Notepad Update
         { typeof(SocialStatusArgs), HandlerCategory.Standard }, // Player Social Status Update
@@ -466,7 +466,11 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
 
         if (@lock == null)
         {
-            Logger.LogInformation($"{(Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None} lagging - Dropped {action.Method.Name}");
+            try
+            {
+                Logger.LogInformation($"{(Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None} lagging - Dropped {action.Method.Name}");
+            }
+            catch { }
             return;
         }
 
@@ -510,7 +514,11 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
 
         if (@lock == null)
         {
-            Logger.LogInformation($"{(Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None} lagging - Dropped {action.Method.Name}");
+            try
+            {
+                Logger.LogInformation($"{(Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None} lagging - Dropped {action.Method.Name}");
+            }
+            catch { }
             return;
         }
 
