@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -23,7 +24,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 {
     private readonly ConcurrentQueue<SocketAsyncEventArgs> SocketArgsQueue;
     private SocketAsyncEventArgs? _receiveArgs;
-    private int Count;
+    private int _bytesReadIn;
     private int _disconnecting;
     private int _disposed;
     private int _receiveStarted;
@@ -106,7 +107,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         if (Interlocked.Exchange(ref _receiveStarted, 1) == 1) return;
 
         Connected = true;
-        Count = 0;
+        _bytesReadIn = 0;
 
         _receiveArgs = new SocketAsyncEventArgs();
         _receiveArgs.SetBuffer(Memory);
@@ -137,9 +138,9 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             }
 
             // Append bytes into rolling buffer
-            Count += bytesRead;
+            _bytesReadIn += bytesRead;
 
-            if (Count > ReceiveBufferSize)
+            if (_bytesReadIn > ReceiveBufferSize)
             {
                 Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
                       .WithProperty(this)
@@ -156,10 +157,8 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             var resetBuffer = false;
 
             // Process as many *complete* packets as possible
-            while (Count - offset >= 4)
+            while (_bytesReadIn > 3)
             {
-                int available = Count - offset;
-
                 // Signature check
                 byte sig = Buffer[offset];
                 if (sig != 0xAA)
@@ -170,62 +169,25 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                               "Disconnecting client {RemoteIp} due to bad signature: {Sig} (Count={Count})",
                               RemoteIp,
                               sig,
-                              Count);
+                              _bytesReadIn);
 
                     CloseTransport();
                     return;
                 }
-
-                // Extract length
-                int lengthHi = Buffer[offset + 1];
-                int lengthLo = Buffer[offset + 2];
-                int payloadLength = (lengthHi << 8) | lengthLo;
 
                 // Full frame length = 3 header bytes + payloadLength
-                int frameLength = payloadLength + 3;
-
-                if (payloadLength < 1)
-                {
-                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                          .WithProperty(this)
-                          .LogWarning(
-                              "Disconnecting client {RemoteIp} due to invalid payload length. Payload={PayloadLength}, Count={Count}",
-                              RemoteIp,
-                              payloadLength,
-                              Count);
-
-                    CloseTransport();
-                    return;
-                }
-
-                if (frameLength <= 0 || frameLength > MaxPacketLength)
-                {
-                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
-                          .WithProperty(this)
-                          .LogWarning(
-                              "Disconnecting client {RemoteIp} due to invalid frame length. Payload={PayloadLength}, Frame={FrameLength}, Count={Count}",
-                              RemoteIp,
-                              payloadLength,
-                              frameLength,
-                              Count);
-
-                    CloseTransport();
-                    return;
-                }
+                int frameLength = (Buffer[offset + 1] << 8) + Buffer[offset + 2] + 3;
 
                 // Not enough bytes yet for the full frame
-                if (available < frameLength)
+                if (_bytesReadIn < frameLength)
                     break;
 
-                // Slice completed frame
-                var frame = Buffer.Slice(offset, frameLength);
+                if (_bytesReadIn < 4)
+                    break;
 
                 try
                 {
-                    // If OnPacketAsync returns a ValueTask, we handle it efficiently
-                    var vt = OnPacketAsync(frame);
-                    if (!vt.IsCompletedSuccessfully)
-                        await vt.ConfigureAwait(false);
+                    await OnPacketAsync(Buffer.Slice(offset, frameLength)).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -252,34 +214,31 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
                     // Nuke buffer and keep connection
                     resetBuffer = true;
-                    break;
                 }
 
+                _bytesReadIn -= frameLength;
                 offset += frameLength;
-
-                if (offset >= Count)
-                    break;
             }
 
             // Post-loop buffer management
             if (resetBuffer)
             {
                 // Drop everything; next receive starts at buffer[0]
-                Count = 0;
+                _bytesReadIn = 0;
             }
-            else if (Count > 0)
+            
+            if (_bytesReadIn > 0)
             {
-                Count -= offset;
                 // We have Count bytes left starting at "offset"
                 // Slide them to the front so that next receive appends after them
-                if (Count > 0)
-                    Buffer.Slice(offset, Count).CopyTo(Buffer);
+                if (_bytesReadIn > 0)
+                    Buffer.Slice(offset, _bytesReadIn).CopyTo(Buffer);
             }
 
             // Re-arm receive
             if (Connected && Socket.Connected)
             {
-                e.SetBuffer(Memory[Count..]);
+                e.SetBuffer(Memory[_bytesReadIn..]);
                 Socket.ReceiveAndForget(e, ReceiveEventHandler);
             }
         }
