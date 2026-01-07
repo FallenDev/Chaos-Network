@@ -392,15 +392,11 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
             || t == typeof(ItemDroppedOnCreatureArgs)
             || t == typeof(ItemUseArgs)
             || t == typeof(LoginArgs)
-            || t == typeof(MapDataRequestArgs)
-            || t == typeof(NoticeRequestArgs)
             || t == typeof(PickupArgs)
             || t == typeof(RaiseStatArgs)
-            || t == typeof(RefreshRequestArgs)
             || t == typeof(SequenceChangeArgs)
             || t == typeof(ServerTableRequestArgs)
             || t == typeof(SkillUseArgs)
-            || t == typeof(SpacebarArgs)
             || t == typeof(SpellUseArgs)
             || t == typeof(SwapSlotArgs)
             || t == typeof(SynchronizeTicksArgs)
@@ -409,7 +405,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     }
 
     /// <summary>
-    ///     Executes an asynchronous action for a client within a synchronized context.
+    ///     Executes an asynchronous action for a client within a Real-Time context.
     /// </summary>
     /// <param name="client">The client to execute the action against</param>
     /// <param name="args">The args deserialized from the packet</param>
@@ -469,13 +465,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, HandlerCategory category, Func<T, ValueTask> action)
     {
-        if (category == HandlerCategory.RealTime)
-        {
-            await ExecuteHandlerCore(client, action);
-            return;
-        }
-
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(500));
+        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
         if (@lock == null)
         {
@@ -487,11 +477,6 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
             return;
         }
 
-        await ExecuteHandlerCore(client, action);
-    }
-
-    private async ValueTask ExecuteHandlerCore(T client, Func<T, ValueTask> action)
-    {
         try
         {
             await action(client);
