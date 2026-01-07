@@ -255,12 +255,9 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     break;
                 }
 
-                // Consume frame
-                Count -= frameLength;
                 offset += frameLength;
 
-                // If all data consumed, break to avoid extra checks
-                if (Count < 4)
+                if (offset >= Count)
                     break;
             }
 
@@ -270,11 +267,13 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 // Drop everything; next receive starts at buffer[0]
                 Count = 0;
             }
-            else if (Count > 0 && offset > 0)
+            else if (Count > 0)
             {
+                Count -= offset;
                 // We have Count bytes left starting at "offset"
                 // Slide them to the front so that next receive appends after them
-                Buffer.Slice(offset, Count).CopyTo(Buffer);
+                if (Count > 0)
+                    Buffer.Slice(offset, Count).CopyTo(Buffer);
             }
 
             // Re-arm receive
