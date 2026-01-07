@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 
 using Chaos.Common.Synchronization;
 using Chaos.Extensions.Networking;
@@ -372,75 +373,39 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         Standard
     }
 
-    /// <summary>
-    ///     Client handler categories mapped by argument type.
-    /// </summary>
-    private static readonly Dictionary<Type, HandlerCategory> HandlerCategories = new()
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static HandlerCategory GetHandlerCategory(object args) => IsRealTime(args.GetType()) ? HandlerCategory.RealTime : HandlerCategory.Standard;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsRealTime(Type t)
     {
-        // RealTime Handlers
-        { typeof(BeginChantArgs), HandlerCategory.RealTime }, // Spellcasting
-        { typeof(ChantArgs), HandlerCategory.RealTime }, // Spellcasting
-        { typeof(ClientRedirectedArgs), HandlerCategory.RealTime }, // Server Redirection
-        { typeof(ClientWalkArgs), HandlerCategory.RealTime }, // Client Movement
-        { typeof(ExchangeInteractionArgs), HandlerCategory.RealTime }, // Player Trading
-        { typeof(ExitRequestArgs), HandlerCategory.RealTime }, // Game Exit
-        { typeof(GoldDropArgs), HandlerCategory.RealTime }, // Gold Drop on Ground
-        { typeof(GoldDroppedOnCreatureArgs), HandlerCategory.RealTime }, // Gold Drop on NPC
-        { typeof(HeartBeatArgs), HandlerCategory.RealTime }, // Ping/Pong
-        { typeof(ItemDropArgs), HandlerCategory.RealTime }, // Item Drop on Ground
-        { typeof(ItemDroppedOnCreatureArgs), HandlerCategory.RealTime }, // Item Drop on NPC
-        { typeof(ItemUseArgs), HandlerCategory.RealTime }, // Item Use
-        { typeof(LoginArgs), HandlerCategory.RealTime }, // User Login
-        { typeof(MapDataRequestArgs), HandlerCategory.RealTime }, // Map Data Request
-        { typeof(NoticeRequestArgs), HandlerCategory.RealTime }, // Intro Notice Board
-        { typeof(PickupArgs), HandlerCategory.RealTime }, // Item/Gold Pickup from Ground
-        { typeof(RaiseStatArgs), HandlerCategory.RealTime }, // Player Stat Raise
-        { typeof(RefreshRequestArgs), HandlerCategory.RealTime }, // Map Refresh Request
-        { typeof(SequenceChangeArgs), HandlerCategory.RealTime }, // Packet Sequence Change
-        { typeof(ServerTableRequestArgs), HandlerCategory.RealTime }, // Server List
-        { typeof(SkillUseArgs), HandlerCategory.RealTime }, // Skill Use
-        { typeof(SpacebarArgs), HandlerCategory.RealTime }, // Skill Use
-        { typeof(SpellUseArgs), HandlerCategory.RealTime }, // Spellcasting
-        { typeof(SwapSlotArgs), HandlerCategory.RealTime }, // Ability & Item Slot Swap
-        { typeof(SynchronizeTicksArgs), HandlerCategory.RealTime }, // Server Synchronization
-        { typeof(TurnArgs), HandlerCategory.RealTime }, // Client Movement
-        { typeof(UnequipArgs), HandlerCategory.RealTime }, // Player Unequip Item
-
-        // Standard Handlers
-        { typeof(BoardInteractionArgs), HandlerCategory.Standard }, // Board Interaction
-        { typeof(ClickArgs), HandlerCategory.Standard }, // On Click Actions
-        { typeof(ClientExceptionArgs), HandlerCategory.Standard }, // Client Exceptions
-        { typeof(CreateCharFinalizeArgs), HandlerCategory.Standard }, // Character Creation
-        { typeof(CreateCharInitialArgs), HandlerCategory.Standard }, // Character Creation
-        { typeof(CreateGroupBoxInfo), HandlerCategory.Standard }, // Group Management
-        { typeof(DialogInteractionArgs), HandlerCategory.Standard }, // NPC Interaction
-        { typeof(DisplayEntityRequestArgs), HandlerCategory.Standard }, // Client Entity ID Request
-        { typeof(EditableProfileArgs), HandlerCategory.Standard }, // Profile Editing
-        { typeof(EmoteArgs), HandlerCategory.Standard }, // Emote Animation
-        { typeof(HomepageRequestArgs), HandlerCategory.Standard }, // Homepage Request
-        { typeof(IgnoreArgs), HandlerCategory.Standard }, // Player Ignore List
-        { typeof(MenuInteractionArgs), HandlerCategory.Standard }, // NPC Menu Interaction
-        { typeof(MetaDataRequestArgs), HandlerCategory.Standard }, // Metafile Data Request
-        { typeof(OptionToggleArgs), HandlerCategory.Standard }, // Player Settings Toggle
-        { typeof(PasswordChangeArgs), HandlerCategory.Standard }, // Player Password Change
-        { typeof(PublicMessageArgs), HandlerCategory.Standard }, // Public Player Chat
-        { typeof(SelfProfileRequestArgs), HandlerCategory.Standard }, // Player Self-Profile Request
-        { typeof(SetNotepadArgs), HandlerCategory.Standard }, // Player Notepad Update
-        { typeof(SocialStatusArgs), HandlerCategory.Standard }, // Player Social Status Update
-        { typeof(ToggleGroupArgs), HandlerCategory.Standard }, // Player Group Toggle
-        { typeof(VersionArgs), HandlerCategory.Standard }, // Client Version Check
-        { typeof(WhisperArgs), HandlerCategory.Standard }, // Private Player Chat
-        { typeof(WorldListRequestArgs), HandlerCategory.Standard }, // Player Worldlist Request
-        { typeof(WorldMapClickArgs), HandlerCategory.Standard }, // Player World Map Interaction
-    };
-
-    private static HandlerCategory GetHandlerCategory(object args)
-    {
-        if (HandlerCategories.TryGetValue(args.GetType(), out var category))
-            return category;
-
-        // Default new/unknown handlers to Standard for backpressure safety
-        return HandlerCategory.Standard;
+        return t == typeof(BeginChantArgs)
+            || t == typeof(ChantArgs)
+            || t == typeof(ClientRedirectedArgs)
+            || t == typeof(ClientWalkArgs)
+            || t == typeof(ExchangeInteractionArgs)
+            || t == typeof(ExitRequestArgs)
+            || t == typeof(GoldDropArgs)
+            || t == typeof(GoldDroppedOnCreatureArgs)
+            || t == typeof(HeartBeatArgs)
+            || t == typeof(ItemDropArgs)
+            || t == typeof(ItemDroppedOnCreatureArgs)
+            || t == typeof(ItemUseArgs)
+            || t == typeof(LoginArgs)
+            || t == typeof(MapDataRequestArgs)
+            || t == typeof(NoticeRequestArgs)
+            || t == typeof(PickupArgs)
+            || t == typeof(RaiseStatArgs)
+            || t == typeof(RefreshRequestArgs)
+            || t == typeof(SequenceChangeArgs)
+            || t == typeof(ServerTableRequestArgs)
+            || t == typeof(SkillUseArgs)
+            || t == typeof(SpacebarArgs)
+            || t == typeof(SpellUseArgs)
+            || t == typeof(SwapSlotArgs)
+            || t == typeof(SynchronizeTicksArgs)
+            || t == typeof(TurnArgs)
+            || t == typeof(UnequipArgs);
     }
 
     /// <summary>
