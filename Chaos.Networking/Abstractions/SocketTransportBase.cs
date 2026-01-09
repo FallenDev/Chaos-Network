@@ -146,7 +146,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 return;
             }
 
-            var buffer = Buffer;
             var offset = 0;
             var resetBuffer = false;
 
@@ -154,7 +153,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             while ((uint)(_bytesReadIn - offset) >= 4u)
             {
                 // Signature rail
-                byte sig = buffer[offset];
+                byte sig = Buffer[offset];
                 if (sig != 0xAA)
                 {
                     Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
@@ -170,7 +169,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 }
 
                 // Body length is big-endian, includes opcode + (maybe) sequence + payload
-                var bodyLength = (buffer[offset + 1] << 8) | buffer[offset + 2];
+                var bodyLength = (Buffer[offset + 1] << 8) | Buffer[offset + 2];
 
                 // Body length rails - must be at least 1 (opcode) and not exceed max packet length - 3 (header)
                 // Also prevents overflow when adding header size (3)
@@ -196,43 +195,32 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 if ((uint)(_bytesReadIn - offset) < (uint)frameLength)
                     break;
 
-                // Complete frame
-                var frame = buffer.Slice(offset, frameLength);
+                ValueTask vt;
 
                 try
                 {
-                    var vt = OnPacketAsync(frame);
-                    if (!vt.IsCompletedSuccessfully)
-                        await vt.ConfigureAwait(false);
+                    vt = OnPacketAsync(Buffer.Slice(offset, frameLength));
                 }
                 catch (Exception ex)
                 {
-                    // Best-effort diagnostics, but do not let logging failures take down the loop
-                    try
-                    {
-                        // Exception path is rare; allocation is acceptable here.
-                        var snapshot = frame.ToArray();
-                        var hex = BitConverter.ToString(snapshot).Replace("-", " ");
-                        var ascii = Encoding.ASCII.GetString(snapshot);
-
-                        Logger.WithTopics(
-                                  Topics.Entities.Client,
-                                  Topics.Entities.Packet,
-                                  Topics.Actions.Processing)
-                              .WithProperty(this)
-                              .LogError(
-                                  ex,
-                                  "Error handling packet (Offset={Offset}, Length={Length})\nHex: {Hex}\nASCII: {Ascii}",
-                                  offset,
-                                  frameLength,
-                                  hex,
-                                  ascii);
-                    }
-                    catch { }
-
-                    // Keep connection, but drop buffered data to avoid poisoned state
+                    // Synchronous exception from OnPacketAsync call-site (rare)
+                    LogPacketHandlingError(ex, offset, frameLength);
                     resetBuffer = true;
                     break;
+                }
+
+                if (!vt.IsCompletedSuccessfully)
+                {
+                    try
+                    {
+                        await vt.ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogPacketHandlingError(ex, offset, frameLength);
+                        resetBuffer = true;
+                        break;
+                    }
                 }
 
                 offset += frameLength;
@@ -251,7 +239,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                 // We have _bytesReadIn bytes left starting at "offset"
                 // Slide them to the front so that next receive appends after them
                 if (leftover > 0)
-                    buffer.Slice(offset, leftover).CopyTo(buffer);
+                    Buffer.Slice(offset, leftover).CopyTo(Buffer);
             }
 
             // Re-arm receive
@@ -269,6 +257,31 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         {
             ReceiveSync.Release();
         }
+    }
+
+    private void LogPacketHandlingError(Exception ex, int offset, int frameLength)
+    {
+        try
+        {
+            var slice = Buffer.Slice(offset, frameLength);
+            var snapshot = slice.ToArray();
+            var hex = BitConverter.ToString(snapshot).Replace("-", " ");
+            var ascii = Encoding.ASCII.GetString(snapshot);
+
+            Logger.WithTopics(
+                      Topics.Entities.Client,
+                      Topics.Entities.Packet,
+                      Topics.Actions.Processing)
+                  .WithProperty(this)
+                  .LogError(
+                      ex,
+                      "Error handling packet (Offset={Offset}, Length={Length})\nHex: {Hex}\nASCII: {Ascii}",
+                      offset,
+                      frameLength,
+                      hex,
+                      ascii);
+        }
+        catch { }
     }
 
     /// <inheritdoc />
