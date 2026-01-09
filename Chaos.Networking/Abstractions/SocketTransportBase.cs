@@ -124,78 +124,96 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         {
             var bytesRead = e.BytesTransferred;
 
-            // Transport-level sanity checks
-            if (bytesRead == 0)
+            // Transport rails
+            if (bytesRead == 0 || e.SocketError != SocketError.Success)
             {
                 CloseTransport();
                 return;
             }
 
-            if (e.SocketError != SocketError.Success)
-            {
-                CloseTransport();
-                return;
-            }
-
-            // Append bytes into rolling buffer
+            // Update count of valid bytes in receive buffer
             _bytesReadIn += bytesRead;
 
-            if (_bytesReadIn > ReceiveBufferSize)
+            if ((uint)_bytesReadIn > (uint)ReceiveBufferSize)
             {
                 Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
                       .WithProperty(this)
-                      .LogWarning(
-                          "Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})",
-                          RemoteIp,
-                          ReceiveBufferSize);
+                      .LogWarning("Disconnecting client {RemoteIp} due to receive buffer overflow ({ReceiveBufferSize})",
+                      RemoteIp,
+                      ReceiveBufferSize);
 
                 CloseTransport();
                 return;
             }
 
+            var buffer = Buffer;
             var offset = 0;
             var resetBuffer = false;
 
-            // Process as many *complete* packets as possible
-            while (_bytesReadIn > 3)
+            // Minimum wire frame is 4 bytes: [signature][len_hi][len_lo][opcode]
+            while ((uint)(_bytesReadIn - offset) >= 4u)
             {
-                // Signature check
-                byte sig = Buffer[offset];
+                // Signature rail
+                byte sig = buffer[offset];
                 if (sig != 0xAA)
                 {
                     Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
                           .WithProperty(this)
-                          .LogWarning(
-                              "Disconnecting client {RemoteIp} due to bad signature: {Sig} (Count={Count})",
-                              RemoteIp,
-                              sig,
-                              _bytesReadIn);
+                          .LogWarning("Disconnecting client {RemoteIp} due to bad signature: {Sig} (BytesIn={BytesIn}, Offset={Offset})",
+                          RemoteIp,
+                          sig,
+                          _bytesReadIn,
+                          offset);
 
                     CloseTransport();
                     return;
                 }
 
-                // Full frame length = 3 header bytes + payloadLength
-                int frameLength = (Buffer[offset + 1] << 8) + Buffer[offset + 2] + 3;
+                // Body length is big-endian, includes opcode + (maybe) sequence + payload
+                var bodyLength = (buffer[offset + 1] << 8) | buffer[offset + 2];
 
-                // Not enough bytes yet for the full frame
-                if (_bytesReadIn < frameLength)
+                // Body length rails - must be at least 1 (opcode) and not exceed max packet length - 3 (header)
+                // Also prevents overflow when adding header size (3)
+                if ((uint)bodyLength < 1u || (uint)bodyLength > (uint)(MaxPacketLength - 3))
+                {
+                    Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet)
+                          .WithProperty(this)
+                          .LogWarning(
+                              "Disconnecting client {RemoteIp} due to invalid body length. Body={BodyLength}, BytesIn={BytesIn}, Offset={Offset}",
+                              RemoteIp,
+                              bodyLength,
+                              _bytesReadIn,
+                              offset);
+
+                    CloseTransport();
+                    return;
+                }
+
+                // Full frame length = 3 header bytes + bodyLength
+                var frameLength = bodyLength + 3;
+
+                // Not enough bytes yet for the whole frame
+                if ((uint)(_bytesReadIn - offset) < (uint)frameLength)
                     break;
 
-                if (_bytesReadIn < 4)
-                    break;
+                // Complete frame
+                var frame = buffer.Slice(offset, frameLength);
 
                 try
                 {
-                    await OnPacketAsync(Buffer.Slice(offset, frameLength)).ConfigureAwait(false);
+                    var vt = OnPacketAsync(frame);
+                    if (!vt.IsCompletedSuccessfully)
+                        await vt.ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
+                    // Best-effort diagnostics, but do not let logging failures take down the loop
                     try
                     {
-                        var slice = Buffer.Slice(offset, frameLength);
-                        var hex = BitConverter.ToString(slice.ToArray()).Replace("-", " ");
-                        var ascii = Encoding.ASCII.GetString(slice);
+                        // Exception path is rare; allocation is acceptable here.
+                        var snapshot = frame.ToArray();
+                        var hex = BitConverter.ToString(snapshot).Replace("-", " ");
+                        var ascii = Encoding.ASCII.GetString(snapshot);
 
                         Logger.WithTopics(
                                   Topics.Entities.Client,
@@ -212,27 +230,28 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     }
                     catch { }
 
-                    // Nuke buffer and keep connection
+                    // Keep connection, but drop buffered data to avoid poisoned state
                     resetBuffer = true;
+                    break;
                 }
 
-                _bytesReadIn -= frameLength;
                 offset += frameLength;
             }
 
-            // Post-loop buffer management
+            // Buffer management
             if (resetBuffer)
             {
-                // Drop everything; next receive starts at buffer[0]
                 _bytesReadIn = 0;
             }
-            
-            if (_bytesReadIn > 0)
+            else if (offset > 0)
             {
-                // We have Count bytes left starting at "offset"
+                var leftover = _bytesReadIn - offset;
+                _bytesReadIn = leftover;
+
+                // We have _bytesReadIn bytes left starting at "offset"
                 // Slide them to the front so that next receive appends after them
-                if (_bytesReadIn > 0)
-                    Buffer.Slice(offset, _bytesReadIn).CopyTo(Buffer);
+                if (leftover > 0)
+                    buffer.Slice(offset, leftover).CopyTo(buffer);
             }
 
             // Re-arm receive

@@ -1,32 +1,29 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Chaos.Cryptography;
 
 [ExcludeFromCodeCoverage]
 public static class Crc
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ushort Generate16(ReadOnlySpan<byte> data)
     {
-        ushort crc = 0;
-        var table = Tables.TABLE16;
+        uint checkSum = 0;
 
-        for (int i = 0; i < data.Length; i++)
-        {
-            // top byte of crc xor next data byte gives 0..255
-            int idx = ((crc >> 8) ^ data[i]) & 0xFF;
-            crc = (ushort)((crc << 8) ^ table[idx]);
-        }
+        for (var i = 0; i < data.Length; ++i)
+            checkSum = (ushort)(data[i] ^ (checkSum << 8) ^ Tables.TABLE16[(int)(checkSum >> 8)]);
 
-        return crc;
+        return (ushort)checkSum;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint Generate32(ReadOnlySpan<byte> data)
     {
-        uint checkSum = uint.MaxValue;
-        var table = Tables.TABLE32;
+        var checkSum = uint.MaxValue;
 
-        for (var i = 0; i < data.Length; i++)
-            checkSum = (checkSum >> 8) ^ table[(int)((checkSum & 0xFF) ^ data[i])];
+        for (var i = 0; i < data.Length; ++i)
+            checkSum = (checkSum >> 8) ^ Tables.TABLE32[(int)((checkSum & byte.MaxValue) ^ data[i])];
 
         return ~checkSum;
     }
