@@ -6,14 +6,15 @@ namespace Chaos.Networking.Entities.Server;
 /// Server packet 0x13 (HealthBar)
 ///     Wire format:
 ///         SourceId (u32)
-///         Kind     (u8)  // observed: 0, 2
+///         Kind     (u8)  // sprite type: 0=Player, 1=NPC, 2=Monster
 ///         Percent  (u8)
 ///         Sound    (u8)  // 0xFF => no sound
-///         Tail     (u8)? // optional, observed as 0x00; commonly present when Kind==2
+///         Tail     (u8)? // Observed as 0x00; Present when Kind: 1 or 2
 ///         
 /// Assumptions:
-/// - Player health updates: Kind=0, no Tail
-/// - Monster health updates: Kind=2, Tail=0
+/// - Player health updates: Kind: 0x00, no Tail
+/// - NPC health updates: Kind: 0x01, Tail: 0x00
+/// - Monster health updates: Kind: 0x02, Tail: 0x00
 /// </summary>
 public sealed record HealthBarArgs : IPacketSerializable
 {
@@ -23,8 +24,7 @@ public sealed record HealthBarArgs : IPacketSerializable
     public uint SourceId { get; set; }
 
     /// <summary>
-    /// Mode/subtype byte carried on the wire. Do not hardcode.
-    /// Observed values: 0 and 2 (1 may exist in other flows).
+    /// Values: 0 (Player), 1 (NPC), 2 (Monster).
     /// </summary>
     public byte Kind { get; set; }
 
@@ -39,7 +39,7 @@ public sealed record HealthBarArgs : IPacketSerializable
     public byte? Sound { get; set; }
 
     /// <summary>
-    /// Optional trailing byte. Observed as 0x00; commonly present when Kind==2. 
+    /// Optional trailing byte. Observed as 0x00; commonly present when Kind 1 & 2. 
     /// </summary>
     public byte? Tail { get; set; }
 }
