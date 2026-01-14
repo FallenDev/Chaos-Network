@@ -17,15 +17,21 @@ public sealed class HealthBarConverter : PacketConverterBase<HealthBarArgs>
     public override HealthBarArgs Deserialize(ref SpanReader reader)
     {
         var sourceId = reader.ReadUInt32();
-        _ = reader.ReadByte(); //LI: what is this for?
+        var kind = reader.ReadByte();
         var healthPercent = reader.ReadByte();
-        var sound = reader.ReadByte();
+        var soundRaw = reader.ReadByte();
+
+        byte? tail = null;
+        if (reader.Remaining > 0)
+            tail = reader.ReadByte();
 
         return new HealthBarArgs
         {
             SourceId = sourceId,
+            Kind = kind,
             HealthPercent = healthPercent,
-            Sound = sound == byte.MaxValue ? null : sound
+            Sound = soundRaw == byte.MaxValue ? null : soundRaw,
+            Tail = tail
         };
     }
 
@@ -33,8 +39,11 @@ public sealed class HealthBarConverter : PacketConverterBase<HealthBarArgs>
     public override void Serialize(ref SpanWriter writer, HealthBarArgs args)
     {
         writer.WriteUInt32(args.SourceId);
-        writer.WriteByte(0);
+        writer.WriteByte(args.Kind);
         writer.WriteByte(args.HealthPercent);
         writer.WriteByte(args.Sound ?? byte.MaxValue);
+
+        if (args.Tail.HasValue)
+            writer.WriteByte(args.Tail.Value);
     }
 }
