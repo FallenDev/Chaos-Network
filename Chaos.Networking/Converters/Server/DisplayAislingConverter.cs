@@ -1,5 +1,4 @@
 using Chaos.DarkAges.Definitions;
-using Chaos.Geometry.Abstractions.Definitions;
 using Chaos.IO.Memory;
 using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Definitions;
@@ -8,112 +7,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Server;
 
-/// <summary>
-///     Provides serialization and deserialization logic for <see cref="DisplayAislingArgs" />
-/// </summary>
 public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAislingArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ServerOpCode.DisplayAisling;
 
-    /// <inheritdoc />
-    public override DisplayAislingArgs Deserialize(ref SpanReader reader)
-    {
-        var point = reader.ReadPoint16();
-        var direction = reader.ReadByte();
-        var id = reader.ReadUInt32();
-
-        var args = new DisplayAislingArgs
-        {
-            X = point.X,
-            Y = point.Y,
-            Direction = (Direction)direction,
-            Id = id
-        };
-
-        var headSprite = reader.ReadUInt16();
-
-        if (headSprite == ushort.MaxValue)
-        {
-            var sprite = reader.ReadUInt16();
-            var headColor = reader.ReadByte();
-            var bootsColor = reader.ReadByte();
-            _ = reader.ReadBytes(6); //LI: what is this for? (maybe lanternSize, restPosition, isTransparent)?
-
-            args.Sprite = (ushort)(sprite - NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET);
-            args.HeadColor = (DisplayColor)headColor;
-            args.BootsColor = (DisplayColor)bootsColor;
-        } else
-        {
-            var bodySprite = reader.ReadByte();
-            var armorSprite1 = reader.ReadUInt16();
-            var bootsSprite = reader.ReadByte();
-            var armorSprite2 = reader.ReadUInt16();
-            var shieldSprite = reader.ReadByte();
-            var weaponSprite = reader.ReadUInt16();
-            var headColor = reader.ReadByte();
-            var bootsColor = reader.ReadByte();
-            var accessoryColor1 = reader.ReadByte();
-            var accessorySprite1 = reader.ReadUInt16();
-            var accessoryColor2 = reader.ReadByte();
-            var accessorySprite2 = reader.ReadUInt16();
-            var accessoryColor3 = reader.ReadByte();
-            var accessorySprite3 = reader.ReadUInt16();
-            var lanternSize = reader.ReadByte();
-            var restPosition = reader.ReadByte();
-            var overcoatSprite = reader.ReadUInt16();
-            var overcoatColor = reader.ReadByte();
-            var bodyColor = reader.ReadByte();
-            var isTransparent = reader.ReadBoolean();
-            var faceSprite = reader.ReadByte();
-
-            args.HeadSprite = headSprite;
-
-            var pantsColor = bodySprite % 16;
-
-            if (pantsColor != 0)
-            {
-                bodySprite = (byte)(bodySprite - pantsColor);
-                args.PantsColor = (DisplayColor)pantsColor;
-            }
-
-            args.BodySprite = (BodySprite)bodySprite;
-            args.ArmorSprite1 = armorSprite1;
-            args.BootsSprite = bootsSprite;
-            args.ArmorSprite2 = armorSprite2;
-            args.ShieldSprite = shieldSprite;
-            args.WeaponSprite = weaponSprite;
-            args.HeadColor = (DisplayColor)headColor;
-            args.BootsColor = (DisplayColor)bootsColor;
-            args.AccessoryColor1 = (DisplayColor)accessoryColor1;
-            args.AccessorySprite1 = accessorySprite1;
-            args.AccessoryColor2 = (DisplayColor)accessoryColor2;
-            args.AccessorySprite2 = accessorySprite2;
-            args.AccessoryColor3 = (DisplayColor)accessoryColor3;
-            args.AccessorySprite3 = accessorySprite3;
-            args.LanternSize = (LanternSize)lanternSize;
-            args.RestPosition = (RestPosition)restPosition;
-            args.OvercoatSprite = overcoatSprite;
-            args.OvercoatColor = (DisplayColor)overcoatColor;
-            args.BodyColor = (BodyColor)bodyColor;
-            args.IsTransparent = isTransparent;
-            args.FaceSprite = faceSprite;
-        }
-
-        args.NameTagStyle = (NameTagStyle)reader.ReadByte();
-        args.Name = reader.ReadString8();
-        args.GroupBoxText = reader.ReadString8();
-
-        if (args is { BodySprite: BodySprite.None, IsTransparent: true })
-        {
-            args.IsHidden = true;
-            args.IsTransparent = false;
-        }
-
-        return args;
-    }
-
-    /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, DisplayAislingArgs args)
     {
         writer.WritePoint16((ushort)args.X, (ushort)args.Y);
@@ -127,21 +24,24 @@ public sealed class DisplayAislingConverter : PacketConverterBase<DisplayAisling
             writer.WriteBytes(new byte[25]);
             writer.WriteBoolean(args.IsHidden);
             writer.WriteByte(0);
-        } else if (args.Sprite.HasValue)
+        }
+        else if (args.Sprite.HasValue)
         {
             writer.WriteUInt16(ushort.MaxValue);
             writer.WriteUInt16((ushort)(args.Sprite.Value + NETWORKING_CONSTANTS.CREATURE_SPRITE_OFFSET));
             writer.WriteByte((byte)args.HeadColor);
             writer.WriteByte((byte)args.BootsColor);
             writer.WriteBytes(new byte[6]);
-        } else if (args.IsDead)
+        }
+        else if (args.IsDead)
         {
             writer.WriteUInt16(args.HeadSprite);
             writer.WriteByte((byte)(args.Gender == Gender.Male ? BodySprite.MaleGhost : BodySprite.FemaleGhost));
             writer.WriteBytes(new byte[25]);
             writer.WriteBoolean(args.IsTransparent);
             writer.WriteByte(args.FaceSprite);
-        } else
+        }
+        else
         {
             var pantsColor = (byte)(args.PantsColor ?? 0);
             var bodySprite = (byte)(args.BodySprite + pantsColor);

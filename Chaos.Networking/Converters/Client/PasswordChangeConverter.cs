@@ -5,15 +5,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="PasswordChangeArgs" />
-/// </summary>
 public sealed class PasswordChangeConverter : PacketConverterBase<PasswordChangeArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.PasswordChange;
 
-    /// <inheritdoc />
     public override PasswordChangeArgs Deserialize(ref SpanReader reader)
     {
         var name = reader.ReadString8();
@@ -26,13 +21,5 @@ public sealed class PasswordChangeConverter : PacketConverterBase<PasswordChange
             CurrentPassword = currentPw,
             NewPassword = newPw
         };
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, PasswordChangeArgs args)
-    {
-        writer.WriteString8(args.Name);
-        writer.WriteString8(args.CurrentPassword);
-        writer.WriteString8(args.NewPassword);
     }
 }

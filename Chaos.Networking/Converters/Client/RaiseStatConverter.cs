@@ -6,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="RaiseStatArgs" />
-/// </summary>
 public sealed class RaiseStatConverter : PacketConverterBase<RaiseStatArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.RaiseStat;
 
-    /// <inheritdoc />
     public override RaiseStatArgs Deserialize(ref SpanReader reader)
     {
         var stat = reader.ReadByte();
@@ -24,7 +19,4 @@ public sealed class RaiseStatConverter : PacketConverterBase<RaiseStatArgs>
             Stat = (Stat)stat
         };
     }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, RaiseStatArgs args) => writer.WriteByte((byte)args.Stat);
 }

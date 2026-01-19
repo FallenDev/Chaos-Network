@@ -6,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="IgnoreArgs" />
-/// </summary>
 public sealed class IgnoreConverter : PacketConverterBase<IgnoreArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.Ignore;
 
-    /// <inheritdoc />
     public override IgnoreArgs Deserialize(ref SpanReader reader)
     {
         var ignoreType = reader.ReadByte();
@@ -32,14 +27,5 @@ public sealed class IgnoreConverter : PacketConverterBase<IgnoreArgs>
         }
 
         return args;
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, IgnoreArgs args)
-    {
-        writer.WriteByte((byte)args.IgnoreType);
-
-        if (args.IgnoreType != IgnoreType.Request)
-            writer.WriteString8(args.TargetName!);
     }
 }

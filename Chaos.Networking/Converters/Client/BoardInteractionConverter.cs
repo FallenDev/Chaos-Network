@@ -6,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="BoardInteractionArgs" />
-/// </summary>
 public sealed class BoardInteractionConverter : PacketConverterBase<BoardInteractionArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.BoardInteraction;
 
-    /// <inheritdoc />
     public override BoardInteractionArgs Deserialize(ref SpanReader reader)
     {
         var boardRequestType = reader.ReadByte();
@@ -102,68 +97,5 @@ public sealed class BoardInteractionConverter : PacketConverterBase<BoardInterac
         }
 
         return args;
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, BoardInteractionArgs args)
-    {
-        writer.WriteByte((byte)args.BoardRequestType);
-
-        switch (args.BoardRequestType)
-        {
-            case BoardRequestType.BoardList:
-            {
-                break;
-            }
-            case BoardRequestType.ViewBoard:
-            {
-                writer.WriteUInt16(args.BoardId!.Value);
-                writer.WriteInt16(args.StartPostId!.Value);
-                writer.WriteByte(240); //idk
-
-                break;
-            }
-            case BoardRequestType.ViewPost:
-            {
-                writer.WriteUInt16(args.BoardId!.Value);
-                writer.WriteInt16(args.PostId!.Value);
-                writer.WriteSByte((sbyte)args.Controls!.Value);
-
-                break;
-            }
-            case BoardRequestType.NewPost:
-            {
-                writer.WriteUInt16(args.BoardId!.Value);
-                writer.WriteString8(args.Subject!);
-                writer.WriteString16(args.Message!);
-
-                break;
-            }
-            case BoardRequestType.Delete:
-            {
-                writer.WriteUInt16(args.BoardId!.Value);
-                writer.WriteInt16(args.PostId!.Value);
-
-                break;
-            }
-            case BoardRequestType.SendMail:
-            {
-                writer.WriteUInt16(args.BoardId!.Value);
-                writer.WriteString8(args.To!);
-                writer.WriteString8(args.Subject!);
-                writer.WriteString16(args.Message!);
-
-                break;
-            }
-            case BoardRequestType.Highlight:
-            {
-                writer.WriteUInt16(args.BoardId!.Value);
-                writer.WriteInt16(args.PostId!.Value);
-
-                break;
-            }
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
     }
 }

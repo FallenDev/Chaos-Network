@@ -6,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="MenuInteractionArgs" />
-/// </summary>
 public sealed class MenuInteractionConverter : PacketConverterBase<MenuInteractionArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.MenuInteraction;
 
-    /// <inheritdoc />
     public override MenuInteractionArgs Deserialize(ref SpanReader reader)
     {
         var entityType = reader.ReadByte();
@@ -43,19 +38,5 @@ public sealed class MenuInteractionConverter : PacketConverterBase<MenuInteracti
         }
 
         return args;
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, MenuInteractionArgs args)
-    {
-        writer.WriteByte((byte)args.EntityType);
-        writer.WriteUInt32(args.EntityId);
-        writer.WriteUInt16(args.PursuitId);
-
-        if (args.Slot.HasValue)
-            writer.WriteByte(args.Slot.Value);
-        else
-            foreach (var arg in args.Args?.TakeLast(2) ?? [])
-                writer.WriteString8(arg);
     }
 }

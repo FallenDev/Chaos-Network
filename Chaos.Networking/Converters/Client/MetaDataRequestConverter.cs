@@ -6,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="MetaDataRequestArgs" />
-/// </summary>
 public sealed class MetaDataRequestConverter : PacketConverterBase<MetaDataRequestArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.MetaDataRequest;
 
-    /// <inheritdoc />
     public override MetaDataRequestArgs Deserialize(ref SpanReader reader)
     {
         var metadataRequestType = reader.ReadByte();
@@ -41,23 +36,5 @@ public sealed class MetaDataRequestConverter : PacketConverterBase<MetaDataReque
         }
 
         return args;
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, MetaDataRequestArgs args)
-    {
-        writer.WriteByte((byte)args.MetaDataRequestType);
-
-        switch (args.MetaDataRequestType)
-        {
-            case MetaDataRequestType.DataByName:
-                writer.WriteString8(args.Name!);
-
-                break;
-            case MetaDataRequestType.AllCheckSums:
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
     }
 }

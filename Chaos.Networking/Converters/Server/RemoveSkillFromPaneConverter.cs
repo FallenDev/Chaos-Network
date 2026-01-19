@@ -5,25 +5,9 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Server;
 
-/// <summary>
-///     Provides serialization and deserialization logic for <see cref="RemoveSkillFromPaneArgs" />
-/// </summary>
 public sealed class RemoveSkillFromPaneConverter : PacketConverterBase<RemoveSkillFromPaneArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ServerOpCode.RemoveSkillFromPane;
 
-    /// <inheritdoc />
-    public override RemoveSkillFromPaneArgs Deserialize(ref SpanReader reader)
-    {
-        var slot = reader.ReadByte();
-
-        return new RemoveSkillFromPaneArgs
-        {
-            Slot = slot
-        };
-    }
-
-    /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, RemoveSkillFromPaneArgs args) => writer.WriteByte(args.Slot);
 }

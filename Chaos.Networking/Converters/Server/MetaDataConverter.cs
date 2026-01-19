@@ -6,68 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Server;
 
-/// <summary>
-///     Provides serialization and deserialization logic for <see cref="MetaDataArgs" />
-/// </summary>
 public sealed class MetaDataConverter : PacketConverterBase<MetaDataArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ServerOpCode.MetaData;
 
-    /// <inheritdoc />
-    public override MetaDataArgs Deserialize(ref SpanReader reader)
-    {
-        var type = (MetaDataRequestType)reader.ReadByte();
-
-        switch (type)
-        {
-            case MetaDataRequestType.DataByName:
-            {
-                var name = reader.ReadString8();
-                var checkSum = reader.ReadUInt32();
-                var data = reader.ReadData16();
-
-                return new MetaDataArgs
-                {
-                    MetaDataRequestType = type,
-                    MetaDataInfo = new MetaDataInfo
-                    {
-                        Name = name,
-                        CheckSum = checkSum,
-                        Data = data
-                    }
-                };
-            }
-            case MetaDataRequestType.AllCheckSums:
-            {
-                var count = reader.ReadUInt16();
-                var collection = new List<MetaDataInfo>(count);
-
-                for (var i = 0; i < count; i++)
-                {
-                    var name = reader.ReadString8();
-                    var checkSum = reader.ReadUInt32();
-
-                    collection.Add(
-                        new MetaDataInfo
-                        {
-                            Name = name,
-                            CheckSum = checkSum
-                        });
-                }
-
-                return new MetaDataArgs
-                {
-                    MetaDataRequestType = type,
-                    MetaDataCollection = collection
-                };
-            }
-            default:
-                throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown enum value");
-        }
-    }
-
-    /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, MetaDataArgs args)
     {
         writer.WriteByte((byte)args.MetaDataRequestType);

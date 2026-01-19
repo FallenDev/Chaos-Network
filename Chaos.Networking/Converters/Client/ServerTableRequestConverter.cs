@@ -6,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="ServerTableRequestArgs" />
-/// </summary>
 public sealed class ServerTableRequestConverter : PacketConverterBase<ServerTableRequestArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.ServerTableRequest;
 
-    /// <inheritdoc />
     public override ServerTableRequestArgs Deserialize(ref SpanReader reader)
     {
         var serverTableRequestType = reader.ReadByte();
@@ -32,14 +27,5 @@ public sealed class ServerTableRequestConverter : PacketConverterBase<ServerTabl
         }
 
         return args;
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, ServerTableRequestArgs args)
-    {
-        writer.WriteByte((byte)args.ServerTableRequestType);
-
-        if (args.ServerTableRequestType == ServerTableRequestType.ServerId)
-            writer.WriteByte(args.ServerId!.Value);
     }
 }

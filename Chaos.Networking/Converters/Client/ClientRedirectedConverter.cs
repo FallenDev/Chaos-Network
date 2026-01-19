@@ -5,15 +5,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="ClientRedirectedArgs" />
-/// </summary>
 public sealed class ClientRedirectedConverter : PacketConverterBase<ClientRedirectedArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.ClientRedirected;
 
-    /// <inheritdoc />
     public override ClientRedirectedArgs Deserialize(ref SpanReader reader)
     {
         var seed = reader.ReadByte();
@@ -28,14 +23,5 @@ public sealed class ClientRedirectedConverter : PacketConverterBase<ClientRedire
             Name = name,
             Id = id
         };
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, ClientRedirectedArgs args)
-    {
-        writer.WriteByte(args.Seed);
-        writer.WriteString8(args.Key);
-        writer.WriteString8(args.Name);
-        writer.WriteUInt32(args.Id);
     }
 }

@@ -6,28 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Server;
 
-/// <summary>
-///     Provides serialization and deserialization logic for <see cref="LoginMessageArgs" />
-/// </summary>
 public sealed class LoginMessageConverter : PacketConverterBase<LoginMessageArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ServerOpCode.LoginMessage;
 
-    /// <inheritdoc />
-    public override LoginMessageArgs Deserialize(ref SpanReader reader)
-    {
-        var type = reader.ReadByte();
-        var message = reader.ReadString8();
-
-        return new LoginMessageArgs
-        {
-            LoginMessageType = (LoginMessageType)type,
-            Message = message
-        };
-    }
-
-    /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, LoginMessageArgs args)
     {
         writer.WriteByte((byte)args.LoginMessageType);

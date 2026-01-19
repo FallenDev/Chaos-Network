@@ -6,76 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Server;
 
-/// <summary>
-///     Provides serialization and deserialization logic for <see cref="AttributesArgs" />
-/// </summary>
 public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ServerOpCode.Attributes;
 
-    /// <inheritdoc />
-    public override AttributesArgs Deserialize(ref SpanReader reader)
-    {
-        var attributesArgs = new AttributesArgs
-        {
-            StatUpdateType = (StatUpdateType)reader.ReadByte()
-        };
-
-        if (attributesArgs.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Primary))
-        {
-            _ = reader.ReadBytes(3); //LI: what is this for?
-            attributesArgs.Level = reader.ReadByte();
-            attributesArgs.Ability = reader.ReadByte();
-            attributesArgs.MaximumHp = reader.ReadUInt32();
-            attributesArgs.MaximumMp = reader.ReadUInt32();
-            attributesArgs.Str = reader.ReadByte();
-            attributesArgs.Int = reader.ReadByte();
-            attributesArgs.Wis = reader.ReadByte();
-            attributesArgs.Con = reader.ReadByte();
-            attributesArgs.Dex = reader.ReadByte();
-            _ = reader.ReadBoolean(); //HasUnspentPoints
-            attributesArgs.UnspentPoints = reader.ReadByte();
-            attributesArgs.MaxWeight = reader.ReadInt16();
-            attributesArgs.CurrentWeight = reader.ReadInt16();
-            reader.ReadBytes(4); //LI: what is this for? 42 00 88 2E
-        }
-
-        if (attributesArgs.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Vitality))
-        {
-            attributesArgs.CurrentHp = reader.ReadUInt32();
-            attributesArgs.CurrentMp = reader.ReadUInt32();
-        }
-
-        if (attributesArgs.StatUpdateType.AttributeFlagIsSet(StatUpdateType.ExpGold))
-        {
-            attributesArgs.TotalExp = reader.ReadUInt32();
-            attributesArgs.ToNextLevel = reader.ReadUInt32();
-            attributesArgs.TotalAbility = reader.ReadUInt32();
-            attributesArgs.ToNextAbility = reader.ReadUInt32();
-            attributesArgs.GamePoints = reader.ReadUInt32();
-            attributesArgs.Gold = reader.ReadUInt32();
-        }
-
-        if (attributesArgs.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Secondary))
-        {
-            _ = reader.ReadByte(); //LI: what is this for?
-            attributesArgs.Blind = reader.ReadByte() == 8;
-            _ = reader.ReadBytes(3); //LI: what is this for?
-            attributesArgs.HasUnreadMail = reader.ReadByte() == 16;
-            attributesArgs.OffenseElement = (Element)reader.ReadByte();
-            attributesArgs.DefenseElement = (Element)reader.ReadByte();
-            attributesArgs.MagicResistance = reader.ReadByte();
-            _ = reader.ReadByte(); //LI: what is this for?
-            attributesArgs.Ac = reader.ReadSByte();
-            attributesArgs.Dmg = reader.ReadByte();
-            attributesArgs.Hit = reader.ReadByte();
-        }
-
-        return attributesArgs;
-    }
-
-    /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, AttributesArgs args)
     {
         var updateType = args.StatUpdateType;
@@ -93,7 +27,7 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
 
         if (args.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Primary))
         {
-            writer.WriteBytes(1, 0, 0); //LI: what is this for?
+            writer.WriteBytes(1, 0, 0);
             writer.WriteByte(args.Level);
             writer.WriteByte(args.Ability);
             writer.WriteUInt32(args.MaximumHp);
@@ -107,7 +41,7 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
             writer.WriteByte(args.UnspentPoints);
             writer.WriteInt16(args.MaxWeight);
             writer.WriteInt16(args.CurrentWeight);
-            writer.WriteBytes(new byte[4]); //LI: what is this for?  42 00 88 2E
+            writer.WriteBytes(new byte[4]);
         }
 
         if (args.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Vitality))
@@ -128,14 +62,14 @@ public sealed class AttributesConverter : PacketConverterBase<AttributesArgs>
 
         if (args.StatUpdateType.AttributeFlagIsSet(StatUpdateType.Secondary))
         {
-            writer.WriteByte(0); //LI: what is this for?
+            writer.WriteByte(0);
             writer.WriteByte((byte)(args.Blind ? 8 : 0));
-            writer.WriteBytes(new byte[3]); //LI: what is this for?
+            writer.WriteBytes(new byte[3]);
             writer.WriteByte((byte)(args.HasUnreadMail ? MailFlag.HasMail : MailFlag.None));
             writer.WriteByte((byte)args.OffenseElement);
             writer.WriteByte((byte)args.DefenseElement);
             writer.WriteByte(args.MagicResistance);
-            writer.WriteByte(0); //LI: what is this for?
+            writer.WriteByte(0);
             writer.WriteSByte(args.Ac);
             writer.WriteByte(args.Dmg);
             writer.WriteByte(args.Hit);

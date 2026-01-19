@@ -6,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="SocialStatusArgs" />
-/// </summary>
 public sealed class SocialStatusConverter : PacketConverterBase<SocialStatusArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.SocialStatus;
 
-    /// <inheritdoc />
     public override SocialStatusArgs Deserialize(ref SpanReader reader)
     {
         var socialStatus = reader.ReadByte();
@@ -24,7 +19,4 @@ public sealed class SocialStatusConverter : PacketConverterBase<SocialStatusArgs
             SocialStatus = (SocialStatus)socialStatus
         };
     }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, SocialStatusArgs args) => writer.WriteByte((byte)args.SocialStatus);
 }

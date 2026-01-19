@@ -6,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="ClientExceptionArgs" />
-/// </summary>
 public sealed class ClientExceptionConverter : PacketConverterBase<ClientExceptionArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.ClientException;
 
-    /// <inheritdoc />
     public override ClientExceptionArgs Deserialize(ref SpanReader reader)
     {
         var data = reader.ReadData();
@@ -25,13 +20,4 @@ public sealed class ClientExceptionConverter : PacketConverterBase<ClientExcepti
                 .GetString(data)
         };
     }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, ClientExceptionArgs args)
-        =>
-
-            //LI: need to get the real layout of this packet
-            writer.WriteData(
-                Encoding.GetEncoding(949)
-                    .GetBytes(args.ExceptionStr));
 }

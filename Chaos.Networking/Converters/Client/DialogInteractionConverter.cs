@@ -1,5 +1,4 @@
 using Chaos.DarkAges.Definitions;
-using Chaos.Extensions.Common;
 using Chaos.IO.Memory;
 using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
@@ -7,15 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Client;
 
-/// <summary>
-///     Provides packet serialization and deserialization logic for <see cref="DialogInteractionArgs" />
-/// </summary>
 public sealed class DialogInteractionConverter : PacketConverterBase<DialogInteractionArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ClientOpCode.DialogInteraction;
 
-    /// <inheritdoc />
     public override DialogInteractionArgs Deserialize(ref SpanReader reader)
     {
         var entityType = reader.ReadByte();
@@ -64,33 +58,5 @@ public sealed class DialogInteractionConverter : PacketConverterBase<DialogInter
         }
 
         return args;
-    }
-
-    /// <inheritdoc />
-    public override void Serialize(ref SpanWriter writer, DialogInteractionArgs args)
-    {
-        writer.WriteByte((byte)args.EntityType);
-        writer.WriteUInt32(args.EntityId);
-        writer.WriteUInt16(args.PursuitId);
-        writer.WriteUInt16(args.DialogId);
-        writer.WriteByte((byte)args.DialogArgsType);
-
-        switch (args.DialogArgsType)
-        {
-            case DialogArgsType.MenuResponse:
-                writer.WriteByte(args.Option!.Value);
-
-                break;
-            case DialogArgsType.TextResponse:
-                if (!args.Args.IsNullOrEmpty())
-                    foreach (var arg in args.Args.TakeLast(2))
-                        writer.WriteString8(arg);
-
-                break;
-            case DialogArgsType.None:
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
     }
 }

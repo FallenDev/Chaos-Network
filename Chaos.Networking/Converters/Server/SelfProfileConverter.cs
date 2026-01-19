@@ -6,67 +6,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Server;
 
-/// <summary>
-///     Provides serialization and deserialization logic for <see cref="SelfProfileArgs" />
-/// </summary>
 public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ServerOpCode.SelfProfile;
 
-    /// <inheritdoc />
-    public override SelfProfileArgs Deserialize(ref SpanReader reader)
-    {
-        var nation = reader.ReadByte();
-        var guildRank = reader.ReadString8();
-        var title = reader.ReadString8();
-        var groupString = reader.ReadString8();
-        var groupOpen = reader.ReadBoolean();
-        var groupBox = reader.ReadBoolean();
-
-        //TODO: read groupbox shit
-        var baseClass = reader.ReadByte();
-        var enableMasterAbilitityMetadata = reader.ReadBoolean();
-        var enableMasterQuestMetadata = reader.ReadBoolean();
-        var displayClass = reader.ReadString8();
-        var guildName = reader.ReadString8();
-        var legendMarkCount = reader.ReadByte();
-        var legendMarks = new List<LegendMarkInfo>(legendMarkCount);
-
-        for (var i = 0; i < legendMarkCount; i++)
-        {
-            var icon = reader.ReadByte();
-            var color = reader.ReadByte();
-            var key = reader.ReadString8();
-            var text = reader.ReadString8();
-
-            legendMarks.Add(
-                new LegendMarkInfo
-                {
-                    Icon = (MarkIcon)icon,
-                    Color = (MarkColor)color,
-                    Key = key,
-                    Text = text
-                });
-        }
-
-        return new SelfProfileArgs
-        {
-            Nation = (Nation)nation,
-            GuildRank = guildRank,
-            Title = title,
-            GroupString = groupString,
-            GroupOpen = groupOpen,
-            BaseClass = (BaseClass)baseClass,
-            EnableMasterAbilityMetaData = enableMasterAbilitityMetadata,
-            EnableMasterQuestMetaData = enableMasterQuestMetadata,
-            DisplayClass = displayClass,
-            GuildName = guildName,
-            LegendMarks = legendMarks
-        };
-    }
-
-    /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, SelfProfileArgs args)
     {
         writer.WriteByte((byte)args.Nation);
@@ -80,7 +23,7 @@ public sealed class SelfProfileConverter : PacketConverterBase<SelfProfileArgs>
 
         writer.WriteString8(str);
         writer.WriteBoolean(args.GroupOpen);
-        writer.WriteBoolean(false); //TODO: groupbox fml
+        writer.WriteBoolean(false);
         /*
          *  if(user.Group?.Box != null)
             {

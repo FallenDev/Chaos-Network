@@ -7,101 +7,10 @@ using Chaos.Packets.Abstractions;
 
 namespace Chaos.Networking.Converters.Server;
 
-/// <summary>
-///     Provides serialization and deserialization logic for <see cref="DisplayExchangeArgs" />
-/// </summary>
 public sealed class DisplayExchangeConverter : PacketConverterBase<DisplayExchangeArgs>
 {
-    /// <inheritdoc />
     public override byte OpCode => (byte)ServerOpCode.DisplayExchange;
 
-    /// <inheritdoc />
-    public override DisplayExchangeArgs Deserialize(ref SpanReader reader)
-    {
-        var exchangeResponseType = reader.ReadByte();
-
-        var args = new DisplayExchangeArgs
-        {
-            ExchangeResponseType = (ExchangeResponseType)exchangeResponseType
-        };
-
-        switch (args.ExchangeResponseType)
-        {
-            case ExchangeResponseType.StartExchange:
-            {
-                var otherUserId = reader.ReadUInt32();
-                var otherUserName = reader.ReadString8();
-
-                args.OtherUserId = otherUserId;
-                args.OtherUserName = otherUserName;
-
-                break;
-            }
-            case ExchangeResponseType.RequestAmount:
-            {
-                var fromSlot = reader.ReadByte();
-
-                args.FromSlot = fromSlot;
-
-                break;
-            }
-            case ExchangeResponseType.AddItem:
-            {
-                var rightSide = reader.ReadBoolean();
-                var exchangeIndex = reader.ReadByte();
-                var itemSprite = reader.ReadUInt16();
-                var itemColor = reader.ReadByte();
-                var itemName = reader.ReadString8();
-
-                args.RightSide = rightSide;
-                args.ExchangeIndex = exchangeIndex;
-                args.ItemSprite = (ushort)(itemSprite - NETWORKING_CONSTANTS.ITEM_SPRITE_OFFSET);
-                args.ItemColor = (DisplayColor)itemColor;
-                args.ItemName = itemName;
-
-                break;
-            }
-            case ExchangeResponseType.SetGold:
-            {
-                var rightSide = reader.ReadBoolean();
-                var goldAmount = reader.ReadInt32();
-
-                args.RightSide = rightSide;
-                args.GoldAmount = goldAmount;
-
-                break;
-            }
-            case ExchangeResponseType.Cancel:
-            {
-                var rightSide = reader.ReadBoolean();
-                var message = reader.ReadString8();
-
-                args.RightSide = rightSide;
-                args.Message = message;
-
-                break;
-            }
-            case ExchangeResponseType.Accept:
-            {
-                var persistExchange = reader.ReadBoolean();
-                var message = reader.ReadString8();
-
-                args.PersistExchange = persistExchange;
-                args.Message = message;
-
-                break;
-            }
-            default:
-                throw new ArgumentOutOfRangeException(
-                    nameof(args.ExchangeResponseType),
-                    args.ExchangeResponseType,
-                    "Unknown exchange response type");
-        }
-
-        return args;
-    }
-
-    /// <inheritdoc />
     public override void Serialize(ref SpanWriter writer, DisplayExchangeArgs args)
     {
         writer.WriteByte((byte)args.ExchangeResponseType);
