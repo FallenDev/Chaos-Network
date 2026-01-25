@@ -47,7 +47,7 @@ public sealed record DisplayDialogArgs : IPacketSerializable
     /// <summary>
     ///     If the dialog has options, this is a collection of strings that represent selectable options in the dialog's menu
     /// </summary>
-    public ICollection<string>? Options { get; set; }
+    public ICollection<(string Text, ushort Pursuit)>? Options { get; set; }
 
     /// <summary>
     ///     If the dialog is part of a pursuit chain, this is the id of that pursuit
