@@ -57,10 +57,7 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
                 writer.WriteByte((byte)args.Options!.Count);
 
                 foreach (var option in args.Options)
-                {
-                    writer.WriteString8(option.Text);
-                    writer.WriteUInt16(option.Pursuit);
-                }
+                    writer.WriteString8(option);
 
                 break;
             case DialogType.TextEntry:
@@ -74,10 +71,7 @@ public sealed class DisplayDialogConverter : PacketConverterBase<DisplayDialogAr
                 writer.WriteByte((byte)args.Options!.Count);
 
                 foreach (var option in args.Options)
-                {
-                    writer.WriteString8(option.Text);
-                    writer.WriteUInt16(option.Pursuit);
-                }
+                    writer.WriteString8(option);
 
                 break;
             case DialogType.Protected:
