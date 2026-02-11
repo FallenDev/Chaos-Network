@@ -76,19 +76,17 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     protected Socket Socket { get; }
 
     /// <summary>
-    ///     Represents the SocketAsyncEventArgs used for accepting incoming connections.
-    /// </summary>
-    private readonly SocketAsyncEventArgs _acceptArgs = new();
-
-    /// <summary>
     ///     A semaphore for synchronizing access to the server.
     /// </summary>
     protected FifoAutoReleasingSemaphoreSlim Sync { get; }
 
     /// <summary>
-    ///     The concurrent dictionary to track connection attempts.
+    ///     Tracks connection attempts per IPv4 address.
+    ///
+    ///     Key is an IPv4 address packed into a UInt32 in network byte order.
+    ///     We intentionally do not accept IPv6 for this legacy client/server.
     /// </summary>
-    private readonly ConcurrentDictionary<string, (int Count, DateTime LastConnection)> ConnectionAttempts = [];
+    private readonly ConcurrentDictionary<uint, (int Count, long FirstAttemptTicks)> ConnectionAttemptsV4 = [];
 
     /// <summary>
     ///     The maximum number of connections allowed per minute.
@@ -210,13 +208,8 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
                     continue;
                 }
 
-                string ipAddress;
-
-                try
-                {
-                    ipAddress = (clientSocket.RemoteEndPoint as IPEndPoint)?.Address.ToString() ?? "unknown";
-                }
-                catch
+                // Legacy client: IPv4 only. Immediately drop any non-IPv4 endpoint.
+                if (clientSocket.RemoteEndPoint is not IPEndPoint { AddressFamily: AddressFamily.InterNetwork })
                 {
                     try { clientSocket.Close(); } catch { }
                     continue;
@@ -288,26 +281,43 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <returns>True if the connection is allowed, otherwise false</returns>
     protected bool IsConnectionAllowed(string ipAddress)
     {
-        var now = DateTime.UtcNow;
+        // This server only accepts IPv4.
+        if (!IPAddress.TryParse(ipAddress, out var address) || address.AddressFamily != AddressFamily.InterNetwork)
+            return false;
+
+        return IsConnectionAllowed(address);
+    }
+
+    /// <summary>
+    ///     Rate limiter
+    /// </summary>
+    protected bool IsConnectionAllowed(IPAddress address)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetwork)
+            return false;
+
+        if (!TryPackIPv4(address, out var ipKey))
+            return false;
+
+        var nowTicks = DateTime.UtcNow.Ticks;
 
         // Prune old connection attempts
-        PruneOldConnectionAttempts(now);
+        PruneOldConnectionAttempts(nowTicks);
 
-        var connectionData = ConnectionAttempts.GetOrAdd(ipAddress, _ => (0, now));
+        // Count attempts within the window based on the first attempt timestamp.
+        var current = ConnectionAttemptsV4.GetOrAdd(ipKey, _ => (0, nowTicks));
 
-        // If the last connection is older than the window, reset the count
-        if ((now - connectionData.LastConnection) > ConnectionWindow)
+        var windowTicks = ConnectionWindow.Ticks;
+        if ((nowTicks - current.FirstAttemptTicks) > windowTicks)
         {
-            // Reset the count and update the timestamp
-            ConnectionAttempts[ipAddress] = (1, now);
+            ConnectionAttemptsV4[ipKey] = (1, nowTicks);
             return true;
         }
 
-        // If the connection count exceeds the maximum allowed, reject the connection
-        if (connectionData.Count >= MaxConnectionsPerMinute) return false;
+        if (current.Count >= MaxConnectionsPerMinute)
+            return false;
 
-        // Otherwise, increment the count and allow the connection
-        ConnectionAttempts[ipAddress] = (connectionData.Count + 1, connectionData.LastConnection);
+        ConnectionAttemptsV4[ipKey] = (current.Count + 1, current.FirstAttemptTicks);
         return true;
     }
 
@@ -329,24 +339,39 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     ///    This prevents unbounded growth of the connection-attempt cache while
     ///    keeping connection acceptance fast and contention-free.
     /// </summary>
-    private void PruneOldConnectionAttempts(DateTime now)
+    private void PruneOldConnectionAttempts(long nowTicks)
     {
         // Fast path: Gives the most recent value without locking
         var nextTicks = Volatile.Read(ref _nextPruneTicks);
-        if (now.Ticks < nextTicks) return;
+        if (nowTicks < nextTicks) return;
 
         // Single-writer gate so only one thread prunes
-        var newNext = now.AddMilliseconds(PruneIntervalMs).Ticks;
+        var newNext = new DateTime(nowTicks, DateTimeKind.Utc).AddMilliseconds(PruneIntervalMs).Ticks;
         if (Interlocked.CompareExchange(ref _nextPruneTicks, newNext, nextTicks) != nextTicks) return;
 
         // Prune anything stale (older than 2x the window)
-        var cutoff = now - (ConnectionWindow + ConnectionWindow);
+        var cutoffTicks = nowTicks - (ConnectionWindow.Ticks * 2);
 
-        foreach (var kvp in ConnectionAttempts)
+        foreach (var kvp in ConnectionAttemptsV4)
         {
-            if (kvp.Value.LastConnection < cutoff)
-                ConnectionAttempts.TryRemove(kvp.Key, out _);
+            if (kvp.Value.FirstAttemptTicks < cutoffTicks)
+                ConnectionAttemptsV4.TryRemove(kvp.Key, out _);
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryPackIPv4(IPAddress address, out uint key)
+    {
+        Span<byte> bytes = stackalloc byte[4];
+        if (!address.TryWriteBytes(bytes, out var written) || written != 4)
+        {
+            key = 0;
+            return false;
+        }
+
+        // network order: a.b.c.d => 0xAABBCCDD
+        key = ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
+        return true;
     }
 
     #region Handlers
