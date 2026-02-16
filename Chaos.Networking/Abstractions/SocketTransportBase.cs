@@ -78,8 +78,10 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         ReceiveSync = new FifoSemaphoreSlim(1, 1, $"{GetType().Name} {RemoteIp} (Socket)");
 
-        var initialArgs = Enumerable.Range(0, 50).Select(_ => CreateArgs());
-        SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>(initialArgs);
+        SocketArgsQueue = new ConcurrentQueue<SocketAsyncEventArgs>();
+
+        for (var i = 0; i < 50; i++)
+            SocketArgsQueue.Enqueue(CreateArgs());
 
         Connected = false;
     }
@@ -517,7 +519,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     private void CompleteSend(SocketAsyncEventArgs e, SendState state)
     {
         ReturnSendBuffer(state);
-        e.UserToken = null;
         e.SetBuffer(null, 0, 0);
         e.BufferList = null;
         SocketArgsQueue.Enqueue(e);
@@ -529,7 +530,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         if (sendState is not null)
             ReturnSendBuffer(sendState);
 
-        e.UserToken = null;
         e.SetBuffer(null, 0, 0);
         e.BufferList = null;
 
@@ -549,7 +549,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     private void RecycleArgs(SocketAsyncEventArgs e)
     {
-        e.UserToken = null;
         e.SetBuffer(null, 0, 0);
         e.BufferList = null;
         SocketArgsQueue.Enqueue(e);
@@ -557,7 +556,11 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     private SocketAsyncEventArgs CreateArgs()
     {
-        var args = new SocketAsyncEventArgs();
+        var args = new SocketAsyncEventArgs
+        {
+            UserToken = new SendState()
+        };
+
         args.Completed += ReuseSocketAsyncEventArgs;
         return args;
     }
@@ -567,12 +570,15 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         if (!SocketArgsQueue.TryDequeue(out var args))
             args = CreateArgs();
 
-        args.UserToken = new SendState
+        if (args.UserToken is not SendState state)
         {
-            Buffer = buffer,
-            Offset = 0,
-            Remaining = length
-        };
+            state = new SendState();
+            args.UserToken = state;
+        }
+
+        state.Buffer = buffer;
+        state.Offset = 0;
+        state.Remaining = length;
 
         args.SetBuffer(buffer, 0, length);
         return args;

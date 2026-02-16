@@ -104,7 +104,8 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <remarks>A value of 3,600,000 milliseconds corresponds to a pruning interval of one hour. Adjust this
     /// value to control how frequently stale connection-attempt data is removed.</remarks>
     private const int PruneIntervalMs = 60 * 60 * 1000;
-    private long _nextPruneTicks = DateTime.UtcNow.AddMilliseconds(PruneIntervalMs).Ticks;
+    private const long PruneIntervalTicks = PruneIntervalMs * TimeSpan.TicksPerMillisecond;
+    private long _nextPruneTicks = DateTime.UtcNow.Ticks + PruneIntervalTicks;
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="TcpListenerBase{T}" /> class.
@@ -365,7 +366,8 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         if (nowTicks < nextTicks) return;
 
         // Single-writer gate so only one thread prunes
-        var newNext = new DateTime(nowTicks, DateTimeKind.Utc).AddMilliseconds(PruneIntervalMs).Ticks;
+        var newNext = nowTicks + PruneIntervalTicks;
+        
         if (Interlocked.CompareExchange(ref _nextPruneTicks, newNext, nextTicks) != nextTicks) return;
 
         // Prune anything stale (older than 2x the window)
