@@ -61,11 +61,11 @@ public sealed class Crypto : ICrypto
         var key = new byte[SessionKeyLength];
         var salts = _keySalts;
         var saltsCount = salts.Length;
+        var bSquared = b * b;
 
-        // Keep the exact formula (protocol compatibility).
         for (var i = 0; i < SessionKeyLength; i++)
         {
-            var idx = (i * (SessionKeyLength * i + b * b) + a) % saltsCount;
+            var idx = (i * (SessionKeyLength * i + bSquared) + a) % saltsCount;
             key[i] = salts[idx];
         }
 
@@ -74,12 +74,12 @@ public sealed class Crypto : ICrypto
 
     public byte[] GenerateKeySalts(string seed)
     {
-        // Preserve original behavior exactly:
         // saltTable = md5(md5(seed));
-        // repeat 31 times: saltTable += md5(saltTable);
+        // Repeat 31 times: saltTable += md5(saltTable);
         //
         // BUT do it without O(n^2) string concatenation:
-        // maintain ASCII bytes of the growing hex string, hash those bytes each time, append new hex bytes.
+        // maintain ASCII bytes of the growing hex string,
+        // hash those bytes each time, append new hex bytes.
 
         Span<byte> seedBytes = stackalloc byte[Ascii.GetByteCount(seed)];
         Ascii.GetBytes(seed, seedBytes);
@@ -118,20 +118,6 @@ public sealed class Crypto : ICrypto
     }
 
     #region Utility
-
-    public string GetMd5Hash(string value)
-    {
-        // Kept for interface compatibility; used rarely now.
-        Span<byte> input = stackalloc byte[Ascii.GetByteCount(value)];
-        Ascii.GetBytes(value, input);
-
-        Span<byte> hash = stackalloc byte[16];
-        if (!MD5.TryHashData(input, hash, out _))
-            throw new CryptographicException("MD5 hashing failed.");
-
-        // This returns a string; fine for rare calls.
-        return Convert.ToHexStringLower(hash);
-    }
 
     private static void FillCryptoSeed(out ushort a, out byte b)
     {
@@ -176,16 +162,26 @@ public sealed class Crypto : ICrypto
         int length)
     {
         var keyLen = key.Length;
+        var sequenceSalt = salts[sequence];
+        var keyIndex = 0;
+        var saltIndex = 0;
 
         for (var i = 0; i < length; i++)
         {
-            // same as (i / keyLen) % 256
-            var saltIndex = (i / keyLen) & 0xFF;
+            var saltValue = salts[saltIndex];
 
-            buffer[i] ^= (byte)(salts[saltIndex] ^ key[i % keyLen]);
+            buffer[i] ^= (byte)(saltValue ^ key[keyIndex]);
 
             if (saltIndex != sequence)
-                buffer[i] ^= salts[sequence];
+                buffer[i] ^= sequenceSalt;
+
+            keyIndex++;
+
+            if (keyIndex != keyLen)
+                continue;
+
+            keyIndex = 0;
+            saltIndex = (saltIndex + 1) & 0xFF;
         }
     }
 
@@ -229,19 +225,20 @@ public sealed class Crypto : ICrypto
         Key = GenerateKey(a, b);
     }
 
-    /// <summary>Decrypts a packet that's been sent to a client.</summary>
+    /// <summary>
+    /// Decrypts a packet that's been sent to a client
+    /// </summary>
     public void ClientDecrypt(ref Span<byte> buffer, byte opCode, byte sequence)
     {
-        // Client decrypts server->client packets. Those always end with 3 seed bytes if encrypted.
-        var resultLength = buffer.Length - 3;
-
-        var a = (ushort)(((buffer[resultLength + 2] << 8) | buffer[resultLength]) ^ ClientDecryptA_Xor);
-        var b = (byte)(buffer[resultLength + 1] ^ ServerB_Xor);
-
         var type = GetServerEncryptionType(opCode);
         if (type == EncryptionType.None)
             return;
 
+        // Client decrypts server -> client packets. Always end with 3 seed bytes if encrypted.
+        var resultLength = buffer.Length - 3;
+
+        var a = (ushort)(((buffer[resultLength + 2] << 8) | buffer[resultLength]) ^ ClientDecryptA_Xor);
+        var b = (byte)(buffer[resultLength + 1] ^ ServerB_Xor);
         var salts = Salts;
         ReadOnlySpan<byte> thisKey = type == EncryptionType.Normal ? Key : GenerateKey(a, b);
 
@@ -249,7 +246,9 @@ public sealed class Crypto : ICrypto
         buffer = buffer[..resultLength];
     }
 
-    /// <summary>Encrypts a packet that's being sent from a client.</summary>
+    /// <summary>
+    /// Encrypts a packet that's being sent from a client
+    /// </summary>
     public void ClientEncrypt(ref Span<byte> buffer, byte opcode, byte sequence)
     {
         if (opcode is 57 or 58)
@@ -272,7 +271,7 @@ public sealed class Crypto : ICrypto
         // - Append 4 hash bytes + 3 seed bytes afterward.
         var payloadLen = buffer.Length;
 
-        var extraPlain = 1;                 // protocol extra byte
+        var extraPlain = 1; // protocol extra byte
         var opcodeEcho = type == EncryptionType.MD5 ? 1 : 0;
         var hashTail = 4;
         var seedTail = 3;
@@ -286,24 +285,47 @@ public sealed class Crypto : ICrypto
 
         var pos = payloadLen;
 
-        // Make the protocol byte explicit (refactor-safe).
+        // Make the protocol byte explicit
         newBuffer[pos++] = 0x00;
 
         if (type == EncryptionType.MD5)
             newBuffer[pos++] = opcode;
 
-        // Encrypt plaintext region [0..pos)
+        // Encrypt plaintext region [0..pos]
         ApplyXorCipher(newBuffer, salts, thisKey, sequence, pos);
 
-        // Hash over: [opcode, sequence, encryptedPlain...]
-        Span<byte> bytesToHash = stackalloc byte[pos + 2];
-        bytesToHash[0] = opcode;
-        bytesToHash[1] = sequence;
-        newBuffer[..pos].CopyTo(bytesToHash[2..]);
-
         Span<byte> md5 = stackalloc byte[16];
-        if (!MD5.TryHashData(bytesToHash, md5, out _))
-            throw new CryptographicException("MD5 hashing failed (packet).");
+        var hashLength = pos + 2;
+
+        if (hashLength <= 512)
+        {
+            Span<byte> bytesToHash = stackalloc byte[hashLength];
+            bytesToHash[0] = opcode;
+            bytesToHash[1] = sequence;
+            newBuffer[..pos].CopyTo(bytesToHash[2..]);
+
+            if (!MD5.TryHashData(bytesToHash, md5, out _))
+                throw new CryptographicException("MD5 hashing failed (packet).");
+        }
+        else
+        {
+            var rented = ArrayPool<byte>.Shared.Rent(hashLength);
+
+            try
+            {
+                var bytesToHash = rented.AsSpan(0, hashLength);
+                bytesToHash[0] = opcode;
+                bytesToHash[1] = sequence;
+                newBuffer[..pos].CopyTo(bytesToHash[2..]);
+
+                if (!MD5.TryHashData(bytesToHash, md5, out _))
+                    throw new CryptographicException("MD5 hashing failed (packet).");
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
 
         // Append selected MD5 bytes
         newBuffer[pos++] = md5[13];
@@ -319,7 +341,9 @@ public sealed class Crypto : ICrypto
         buffer = newBuffer;
     }
 
-    /// <summary>Encrypts a packet that's being sent from a server.</summary>
+    /// <summary>
+    /// Encrypts a packet that's being sent from a server
+    /// </summary>
     public void ServerEncrypt(ref Span<byte> buffer, byte opCode, byte sequence)
     {
         var type = GetServerEncryptionType(opCode);
@@ -345,21 +369,21 @@ public sealed class Crypto : ICrypto
         buffer = newBuffer;
     }
 
-    /// <summary>Decrypts a packet that's been sent to a server.</summary>
+    /// <summary>
+    /// Decrypts a packet that's been sent to a server
+    /// </summary>
     public void ServerDecrypt(ref Span<byte> buffer, byte opCode, byte sequence)
     {
-        // Based on your legacy math:
-        // baseIndex = buffer.Length - 7
-        // then adjust plaintext length by -1 (Normal) or -2 (MD5)
-        var baseIndex = buffer.Length - 7;
-
-        var a = (ushort)(((buffer[baseIndex + 6] << 8) | buffer[baseIndex + 4]) ^ ServerDecryptA_Xor);
-        var b = (byte)(buffer[baseIndex + 5] ^ ClientB_Xor);
-
         var type = GetClientEncryptionType(opCode);
         if (type == EncryptionType.None)
             return;
 
+        // baseIndex = buffer.Length - 7
+        // Then adjust plaintext length by -1 (Normal) or -2 (MD5)
+        var baseIndex = buffer.Length - 7;
+
+        var a = (ushort)(((buffer[baseIndex + 6] << 8) | buffer[baseIndex + 4]) ^ ServerDecryptA_Xor);
+        var b = (byte)(buffer[baseIndex + 5] ^ ClientB_Xor);
         var salts = Salts;
 
         var length = baseIndex;
@@ -367,12 +391,12 @@ public sealed class Crypto : ICrypto
 
         if (type == EncryptionType.Normal)
         {
-            length -= 1;          // protocol extra byte
+            length -= 1; // protocol extra byte
             thisKey = Key;
         }
         else
         {
-            length -= 2;          // protocol extra + opcode echo
+            length -= 2; // protocol extra + opcode echo
             thisKey = GenerateKey(a, b);
         }
 
