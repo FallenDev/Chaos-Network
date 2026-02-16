@@ -6,7 +6,7 @@ using System.Text;
 using Chaos.Common.Identity;
 using Chaos.Common.Synchronization;
 using Chaos.Cryptography.Abstractions;
-using Chaos.Extensions.Networking;
+using Chaos.Networking.Extensions;
 using Chaos.NLog.Logging.Definitions;
 using Chaos.NLog.Logging.Extensions;
 using Chaos.Packets;
@@ -28,6 +28,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     private int _disposed;
     private int _receiveStarted;
     private int _inReceiveCallback;
+    private int _inSendCallback;
 
     private const int ReceiveBufferSize = 64 * 1024;
     public virtual int MaxPacketLength { get; } = 8 * 1024;
@@ -45,9 +46,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     /// <summary>The logger for logging client-related events</summary>
     protected ILogger<SocketTransportBase> Logger { get; }
 
-    private MemoryHandle MemoryHandle { get; }
-    private IMemoryOwner<byte> MemoryOwner { get; }
-
     /// <summary>The packet serializer for serializing and deserializing packets</summary>
     protected IPacketSerializer PacketSerializer { get; }
 
@@ -57,8 +55,9 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
     public Socket Socket { get; }
 
-    private Span<byte> Buffer => Memory.Span;
-    private Memory<byte> Memory => MemoryOwner.Memory;
+    private readonly byte[] ReceiveBuffer = GC.AllocateUninitializedArray<byte>(ReceiveBufferSize);
+    private Span<byte> Buffer => ReceiveBuffer;
+
     private static readonly ArrayPool<byte> SendBufferPool = ArrayPool<byte>.Shared;
 
     protected SocketTransportBase(
@@ -72,10 +71,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         Crypto = crypto;
 
         SocketExtensions.ConfigureTcpSocket(Socket);
-
-        // Rent a receive buffer bigger than max packet to allow multiple packets per read
-        MemoryOwner = MemoryPool<byte>.Shared.Rent(ReceiveBufferSize);
-        MemoryHandle = Memory.Pin();
 
         Logger = logger;
         PacketSerializer = packetSerializer;
@@ -104,7 +99,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         _bytesReadIn = 0;
 
         _receiveArgs = new SocketAsyncEventArgs();
-        _receiveArgs.SetBuffer(Memory);
+        _receiveArgs.SetBuffer(ReceiveBuffer, 0, ReceiveBufferSize);
         _receiveArgs.Completed += ReceiveCompleted;
 
         ArmReceive(_receiveArgs);
@@ -128,7 +123,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
                     return;
 
                 // Re-arm for the next receive
-                e.SetBuffer(Memory[_bytesReadIn..]);
+                e.SetBuffer(_bytesReadIn, ReceiveBufferSize - _bytesReadIn);
                 if (Socket.ReceiveAsync(e))
                     break;
             }
@@ -300,7 +295,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
             if (disp != ReceiveDisposition.Continue)
                 return;
 
-            args.SetBuffer(Memory[_bytesReadIn..]);
+            args.SetBuffer(_bytesReadIn, ReceiveBufferSize - _bytesReadIn);
             ArmReceive(args);
         }
         catch
@@ -338,9 +333,30 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     {
         if (!Connected || !Socket.Connected) return;
 
-        var packet = PacketSerializer.Serialize(obj);
-        Send(ref packet);
+        if (PacketSerializer is IPooledPacketSerializer pooled && pooled.TrySerializePooled(obj, out var opCode, out var payloadBuffer, out var payloadLength))
+        {
+            try
+            {
+                var payloadSpan = payloadBuffer.AsSpan(0, payloadLength);
+                var packet = new Packet(opCode)
+                {
+                    Buffer = payloadSpan
+                };
+
+                Send(ref packet);
+                return;
+            }
+            finally
+            {
+                pooled.ReturnPooled(payloadBuffer);
+            }
+        }
+
+        // Fallback
+        var packetFallback = PacketSerializer.Serialize(obj);
+        Send(ref packetFallback);
     }
+
 
     public virtual void Send(ref Packet packet)
     {
@@ -366,7 +382,22 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         // [signature][len_hi][len_lo][opcode][sequence][payload]
         var buffer = RentWireBuffer(ref packet, out var length);
         var args = DequeueArgs(buffer, length);
-        Socket.SendAndForget(args, ReuseSocketAsyncEventArgs);
+
+        // Start first send (handle sync completion)
+        StartSend(args);
+    }
+
+    private void StartSend(SocketAsyncEventArgs args)
+    {
+        try
+        {
+            if (!Socket.SendAsync(args))
+                ReuseSocketAsyncEventArgs(this, args);
+        }
+        catch
+        {
+            FailSendAndClose(args);
+        }
     }
 
     public abstract bool IsEncrypted(byte opCode);
@@ -391,8 +422,6 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
 
         GC.SuppressFinalize(this);
 
-        try { MemoryHandle.Dispose(); } catch { }
-        try { MemoryOwner.Dispose(); } catch { }
         try { _receiveArgs?.Dispose(); } catch { }
 
         // Drain pool to dispose any outstanding rented send buffers
@@ -400,10 +429,15 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         {
             try
             {
-                if (e.UserToken is byte[] buffer)
+                if (e.UserToken is SendState state)
+                {
+                    ReturnSendBuffer(state);
+                    e.UserToken = null;
+                }
+                else if (e.UserToken is byte[] legacyBuffer)
                 {
                     e.UserToken = null;
-                    SendBufferPool.Return(buffer);
+                    SendBufferPool.Return(legacyBuffer);
                 }
             }
             catch { }
@@ -425,18 +459,98 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
     /// </summary>
     private void ReuseSocketAsyncEventArgs(object? sender, SocketAsyncEventArgs e)
     {
-        if (e.UserToken is byte[] buffer)
-        {
-            e.UserToken = null;
-            SendBufferPool.Return(buffer);
-        }
-
-        if (e.SocketError != SocketError.Success)
-        {
-            try { CloseTransport(); } catch { }
+        // Serialize completion processing even for sync-completion chains
+        if (Interlocked.Exchange(ref _inSendCallback, 1) == 1)
             return;
-        }
 
+        try
+        {
+            while (true)
+            {
+                if (e.UserToken is not SendState state)
+                {
+                    RecycleArgs(e);
+                    return;
+                }
+
+                if (e.SocketError != SocketError.Success)
+                {
+                    FailSendAndClose(e, state);
+                    return;
+                }
+
+                var sent = e.BytesTransferred;
+                if (sent <= 0)
+                {
+                    FailSendAndClose(e, state);
+                    return;
+                }
+
+                state.Offset += sent;
+                state.Remaining -= sent;
+
+                if (state.Remaining <= 0)
+                {
+                    CompleteSend(e, state);
+                    return;
+                }
+
+                // Continue partial send
+                e.SetBuffer(state.Buffer, state.Offset, state.Remaining);
+
+                if (Socket.SendAsync(e))
+                    return; // async completion will continue here later
+
+                // sync completion -> loop and continue progress accounting
+            }
+        }
+        catch
+        {
+            FailSendAndClose(e, e.UserToken as SendState);
+        }
+        finally
+        {
+            Volatile.Write(ref _inSendCallback, 0);
+        }
+    }
+
+    private void CompleteSend(SocketAsyncEventArgs e, SendState state)
+    {
+        ReturnSendBuffer(state);
+        e.UserToken = null;
+        e.SetBuffer(null, 0, 0);
+        e.BufferList = null;
+        SocketArgsQueue.Enqueue(e);
+    }
+
+    private void FailSendAndClose(SocketAsyncEventArgs e, SendState? state = null)
+    {
+        var sendState = state ?? e.UserToken as SendState;
+        if (sendState is not null)
+            ReturnSendBuffer(sendState);
+
+        e.UserToken = null;
+        e.SetBuffer(null, 0, 0);
+        e.BufferList = null;
+
+        try { CloseTransport(); } catch { }
+    }
+
+    private static void ReturnSendBuffer(SendState state)
+    {
+        var buffer = state.Buffer;
+        state.Buffer = [];
+        state.Offset = 0;
+        state.Remaining = 0;
+
+        if (buffer.Length > 0)
+            SendBufferPool.Return(buffer);
+    }
+
+    private void RecycleArgs(SocketAsyncEventArgs e)
+    {
+        e.UserToken = null;
+        e.SetBuffer(null, 0, 0);
         e.BufferList = null;
         SocketArgsQueue.Enqueue(e);
     }
@@ -453,7 +567,13 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         if (!SocketArgsQueue.TryDequeue(out var args))
             args = CreateArgs();
 
-        args.UserToken = buffer;
+        args.UserToken = new SendState
+        {
+            Buffer = buffer,
+            Offset = 0,
+            Remaining = length
+        };
+
         args.SetBuffer(buffer, 0, length);
         return args;
     }

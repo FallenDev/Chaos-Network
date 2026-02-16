@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Frozen;
 using System.Text;
 
@@ -9,10 +10,11 @@ namespace Chaos.Packets;
 /// <summary>
 /// Serializes/deserializes packet payloads.
 /// </summary>
-public sealed class PacketSerializer : IPacketSerializer
+public sealed class PacketSerializer : IPacketSerializer, IPooledPacketSerializer
 {
     private readonly FrozenDictionary<byte, IPacketConverter> _byOpCode;
     private readonly FrozenDictionary<Type, IPacketConverter> _byType;
+    private static readonly ArrayPool<byte> PayloadPool = ArrayPool<byte>.Shared;
 
     public Encoding Encoding { get; }
 
@@ -72,5 +74,53 @@ public sealed class PacketSerializer : IPacketSerializer
         };
 
         return packet;
+    }
+
+    public bool TrySerializePooled(IPacketSerializable obj, out byte opCode, out byte[] payloadBuffer, out int payloadLength)
+    {
+        opCode = 0;
+        payloadBuffer = Array.Empty<byte>();
+        payloadLength = 0;
+
+        if (!_byType.TryGetValue(obj.GetType(), out var converter))
+            return false;
+
+        opCode = converter.OpCode;
+
+        // Aggressive: avoid SpanWriter auto-grow allocations by retrying with larger pooled buffers.
+        var size = 256;
+        while (true)
+        {
+            var rented = PayloadPool.Rent(size);
+
+            try
+            {
+                var span = rented.AsSpan();
+                var writer = new SpanWriter(Encoding, ref span);
+                converter.Serialize(ref writer, obj);
+
+                payloadLength = writer.Position;
+                payloadBuffer = rented;
+                return true;
+            }
+            catch (EndOfStreamException)
+            {
+                PayloadPool.Return(rented);
+                size <<= 1;
+                if (size > 64 * 1024)
+                    throw;
+            }
+            catch
+            {
+                PayloadPool.Return(rented);
+                throw;
+            }
+        }
+    }
+
+    public void ReturnPooled(byte[] payloadBuffer)
+    {
+        if (payloadBuffer.Length > 0)
+            PayloadPool.Return(payloadBuffer);
     }
 }

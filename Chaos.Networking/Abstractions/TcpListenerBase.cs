@@ -3,9 +3,9 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 
 using Chaos.Common.Synchronization;
-using Chaos.Extensions.Networking;
 using Chaos.Networking.Abstractions.Definitions;
 using Chaos.Networking.Entities.Client;
+using Chaos.Networking.Extensions;
 using Chaos.Networking.Options;
 using Chaos.NLog.Logging.Definitions;
 using Chaos.NLog.Logging.Extensions;
@@ -304,21 +304,40 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         // Prune old connection attempts
         PruneOldConnectionAttempts(nowTicks);
 
-        // Count attempts within the window based on the first attempt timestamp.
-        var current = ConnectionAttemptsV4.GetOrAdd(ipKey, _ => (0, nowTicks));
-
         var windowTicks = ConnectionWindow.Ticks;
-        if ((nowTicks - current.FirstAttemptTicks) > windowTicks)
+
+        // Lock-free CAS loop to avoid lost updates under concurrency
+        while (true)
         {
-            ConnectionAttemptsV4[ipKey] = (1, nowTicks);
-            return true;
+            if (!ConnectionAttemptsV4.TryGetValue(ipKey, out var current))
+            {
+                // First attempt for this IP in the current map state
+                if (ConnectionAttemptsV4.TryAdd(ipKey, (1, nowTicks)))
+                    return true;
+
+                // Another thread added it first; retry
+                continue;
+            }
+
+            // Window rolled over -> reset counter to 1 at current timestamp
+            if ((nowTicks - current.FirstAttemptTicks) > windowTicks)
+            {
+                if (ConnectionAttemptsV4.TryUpdate(ipKey, (1, nowTicks), current))
+                    return true;
+
+                // Contended update; retry with fresh value
+                continue;
+            }
+
+            // Still within window
+            if (current.Count >= MaxConnectionsPerMinute)
+                return false;
+
+            var next = (current.Count + 1, current.FirstAttemptTicks);
+
+            if (ConnectionAttemptsV4.TryUpdate(ipKey, next, current))
+                return true;
         }
-
-        if (current.Count >= MaxConnectionsPerMinute)
-            return false;
-
-        ConnectionAttemptsV4[ipKey] = (current.Count + 1, current.FirstAttemptTicks);
-        return true;
     }
 
     /// <summary>
@@ -399,7 +418,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static HandlerCategory GetHandlerCategory(object args) => IsRealTime(args.GetType()) ? HandlerCategory.RealTime : HandlerCategory.Standard;
+    private static HandlerCategory GetHandlerCategory<TArgs>() => IsRealTime(typeof(TArgs)) ? HandlerCategory.RealTime : HandlerCategory.Standard;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsRealTime(Type t)
@@ -438,7 +457,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <typeparam name="TArgs">The type of the args that were deserialized</typeparam>
     public virtual async ValueTask ExecuteHandler<TArgs>(T client, TArgs args, Func<T, TArgs, ValueTask> action)
     {
-        var category = GetHandlerCategory(args!);
+        var category = GetHandlerCategory<TArgs>();
 
         if (category == HandlerCategory.RealTime)
         {
@@ -452,11 +471,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
 
         if (@lock == null)
         {
-            try
-            {
-                Logger.LogInformation($"{(Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None} lagging - Dropped {action.Method.Name}");
-            }
-            catch { }
+            LogDroppedDueToLag(client, action.Method.Name, 500);
             return;
         }
 
@@ -490,15 +505,27 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     /// <param name="action">The action to be executed</param>
     public virtual async ValueTask ExecuteHandler(T client, HandlerCategory category, Func<T, ValueTask> action)
     {
+        if (category == HandlerCategory.RealTime)
+        {
+            try
+            {
+                await action(client);
+            }
+            catch (Exception e)
+            {
+                Logger.WithTopics(Topics.Entities.Packet, Topics.Actions.Processing)
+                      .WithProperty(client)
+                      .LogError(e, "{@ClientType} failed to execute inner handler", client.GetType().Name);
+            }
+
+            return;
+        }
+
         await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
 
         if (@lock == null)
         {
-            try
-            {
-                Logger.LogInformation($"{(Socket.RemoteEndPoint as IPEndPoint)?.Address ?? IPAddress.None} lagging - Dropped {action.Method.Name}");
-            }
-            catch { }
+            LogDroppedDueToLag(client, action.Method.Name, 300);
             return;
         }
 
@@ -513,6 +540,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
                   .LogError(e, "{@ClientType} failed to execute inner handler", client.GetType().Name);
         }
     }
+
 
     /// <inheritdoc />
     public ValueTask OnSequenceChangeAsync(T client, in Packet packet)
@@ -533,4 +561,17 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     }
 
     #endregion
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void LogDroppedDueToLag(T client, string actionName, int waitMs)
+    {
+        Logger.WithTopics(Topics.Entities.Client, Topics.Entities.Packet, Topics.Actions.Processing)
+              .WithProperty(client)
+              .LogInformation(
+                  "Client lag detected; dropped handler {ActionName} after waiting {WaitMs}ms (ClientId={ClientId}, RemoteIp={RemoteIp})",
+                  actionName,
+                  waitMs,
+                  client.Id,
+                  client.RemoteIp);
+    }
 }

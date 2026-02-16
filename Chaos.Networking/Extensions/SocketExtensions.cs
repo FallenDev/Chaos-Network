@@ -1,37 +1,10 @@
+using System.Buffers.Binary;
 using System.Net.Sockets;
 
-namespace Chaos.Extensions.Networking;
+namespace Chaos.Networking.Extensions;
 
 internal static class SocketExtensions
 {
-    internal static void ReceiveAndForget(this Socket socket, SocketAsyncEventArgs args, EventHandler<SocketAsyncEventArgs> completedEvent)
-    {
-        try
-        {
-            var completedSynchronously = !socket.ReceiveAsync(args);
-            if (completedSynchronously)
-                completedEvent(socket, args);
-        }
-        catch
-        {
-            completedEvent(socket, args);
-        }
-    }
-
-    internal static void SendAndForget(this Socket socket, SocketAsyncEventArgs args, EventHandler<SocketAsyncEventArgs> completedEvent)
-    {
-        try
-        {
-            var completedSynchronously = !socket.SendAsync(args);
-            if (completedSynchronously)
-                completedEvent(socket, args);
-        }
-        catch
-        {
-            completedEvent(socket, args);
-        }
-    }
-
     internal static void ConfigureTcpSocket(Socket tcpSocket)
     {
         // The socket will not linger when Socket.Close is called
@@ -53,15 +26,15 @@ internal static class SocketExtensions
             // SIO_KEEPALIVE_VALS = 0x98000004
             const int SioKeepAliveVals = unchecked((int)0x98000004);
 
-            var inOptionValues = new byte[12];
-            // onOff (1 = true)
-            BitConverter.GetBytes((uint)1).CopyTo(inOptionValues, 0);
-            // Time (ms) before first probe
-            BitConverter.GetBytes((uint)30_000).CopyTo(inOptionValues, 4);
-            // Interval (ms) between probes
-            BitConverter.GetBytes((uint)10_000).CopyTo(inOptionValues, 8);
-            // Apply keep-alive settings
-            tcpSocket.IOControl(SioKeepAliveVals, inOptionValues, null);
+            Span<byte> inOptionValues = stackalloc byte[12];
+
+            // Windows expects little-endian DWORD values for SIO_KEEPALIVE_VALS
+            BinaryPrimitives.WriteUInt32LittleEndian(inOptionValues[..4], 1u);          // onOff
+            BinaryPrimitives.WriteUInt32LittleEndian(inOptionValues.Slice(4, 4), 30_000u); // time (ms)
+            BinaryPrimitives.WriteUInt32LittleEndian(inOptionValues.Slice(8, 4), 10_000u); // interval (ms)
+
+            // IOControl requires byte[], so copy once into a small array for interop call
+            tcpSocket.IOControl(SioKeepAliveVals, inOptionValues.ToArray(), null);
         }
         catch { }
     }
