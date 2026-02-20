@@ -543,7 +543,7 @@ public abstract class SocketTransportBase : ISocketTransport, IDisposable
         state.Offset = 0;
         state.Remaining = 0;
 
-        if (buffer.Length > 0)
+        if (buffer is { Length: > 0 })
             SendBufferPool.Return(buffer);
     }
 

@@ -2,7 +2,7 @@
 
 public sealed class SendState
 {
-    public byte[] Buffer = default!;
+    public byte[] Buffer = [];
     public int Offset;
     public int Remaining;
 }
