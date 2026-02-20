@@ -76,9 +76,9 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
     protected Socket Socket { get; }
 
     /// <summary>
-    ///     A semaphore for synchronizing access to the server.
+    ///     Per-client semaphores used to prevent one client's non-real-time workload from blocking others.
     /// </summary>
-    protected FifoAutoReleasingSemaphoreSlim Sync { get; }
+    private readonly ConcurrentDictionary<uint, FifoSemaphoreSlim> ClientSyncs = [];
 
     /// <summary>
     ///     Tracks connection attempts per IPv4 address.
@@ -130,7 +130,6 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
         ClientHandlers = new ClientHandler?[byte.MaxValue];
         Socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         SocketExtensions.ConfigureTcpSocket(Socket);
-        Sync = new FifoAutoReleasingSemaphoreSlim(1, 15, $"{GetType().Name}");
         IndexHandlers();
     }
 
@@ -367,7 +366,7 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
 
         // Single-writer gate so only one thread prunes
         var newNext = nowTicks + PruneIntervalTicks;
-        
+
         if (Interlocked.CompareExchange(ref _nextPruneTicks, newNext, nextTicks) != nextTicks) return;
 
         // Prune anything stale (older than 2x the window)
@@ -468,16 +467,24 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
             return;
         }
 
-        // Lower priority -> Sync + contention handling
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(500));
+        // Lower priority -> per-client sync + contention handling
+        var sync = GetClientSync(client);
 
-        if (@lock == null)
+        if (!await sync.WaitAsync(TimeSpan.FromMilliseconds(500)))
         {
             LogDroppedDueToLag(client, action.Method.Name, 500);
             return;
         }
 
-        await TryExecuteActionWithArgs(client, args, action);
+        try
+        {
+            await TryExecuteActionWithArgs(client, args, action);
+        }
+        finally
+        {
+            sync.Release();
+            TrimClientSync(client);
+        }
     }
 
     /// <summary>
@@ -523,9 +530,9 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
             return;
         }
 
-        await using var @lock = await Sync.WaitAsync(TimeSpan.FromMilliseconds(300));
+        var sync = GetClientSync(client);
 
-        if (@lock == null)
+        if (!await sync.WaitAsync(TimeSpan.FromMilliseconds(300)))
         {
             LogDroppedDueToLag(client, action.Method.Name, 300);
             return;
@@ -541,8 +548,20 @@ public abstract class TcpListenerBase<T> : BackgroundService, ITcpListener<T> wh
                   .WithProperty(client)
                   .LogError(e, "{@ClientType} failed to execute inner handler", client.GetType().Name);
         }
+        finally
+        {
+            sync.Release();
+            TrimClientSync(client);
+        }
     }
 
+    private FifoSemaphoreSlim GetClientSync(T client) => ClientSyncs.GetOrAdd(client.Id, _ => new FifoSemaphoreSlim(1, 1, $"{GetType().Name} {client.Id}"));
+
+    private void TrimClientSync(T client)
+    {
+        if (!client.Connected)
+            ClientSyncs.TryRemove(client.Id, out _);
+    }
 
     /// <inheritdoc />
     public ValueTask OnSequenceChangeAsync(T client, in Packet packet)
